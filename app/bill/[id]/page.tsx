@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { ArrowLeft } from 'lucide-react'
@@ -33,7 +33,7 @@ interface CommissionInfo {
   examination_result?: string
   examination_report_url?: string
   review_report_url?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface DeliberateInfo {
@@ -41,26 +41,26 @@ interface DeliberateInfo {
   plenary_date?: string
   plenary_result?: string
   present_date?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface TransferredInfo {
   transfer_date?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface PromulgationInfo {
   promulgation_date?: string
   promulgation_number?: string
   law_title?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface AdditionalBillInfo {
   related_bills?: Array<{name: string, link: string}>
   keywords?: string[]
   summary?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface AdditionalApiInfo {
@@ -90,13 +90,7 @@ export default function BillDetailPage() {
 
   const billId = params?.id as string
 
-  useEffect(() => {
-    if (billId) {
-      fetchBillDetails()
-    }
-  }, [billId])
-
-  const fetchBillDetails = async () => {
+  const fetchBillDetails = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -125,7 +119,7 @@ export default function BillDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [billId])
 
   const fetchCommissionInfo = async (billId: string) => {
     try {
@@ -189,7 +183,7 @@ export default function BillDetailPage() {
               rawResults[api.name] = data
               
               // XML 파싱 적용
-              let parsedData: any
+              let parsedData: unknown
               switch (api.name) {
                 case 'deliberate':
                   parsedData = parseDeliberateXML(data)
@@ -371,7 +365,14 @@ export default function BillDetailPage() {
         return { parse_error: 'XML 파싱 오류: ' + parseError.textContent }
       }
       
-      const result: any = {
+      const result: {
+        committee_name: string;
+        examination_reports: Array<{type: string; url: string}>;
+        proceedings: Array<{name: string; date?: string; result?: string}>;
+        documents: unknown[];
+        dates: string[];
+        result: string;
+      } = {
         committee_name: '',
         examination_reports: [],
         proceedings: [],
@@ -473,6 +474,12 @@ export default function BillDetailPage() {
     
     return 'bg-blue-100 text-blue-800'
   }
+
+  useEffect(() => {
+    if (billId) {
+      fetchBillDetails()
+    }
+  }, [billId, fetchBillDetails])
 
   if (loading) {
     return (

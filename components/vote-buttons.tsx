@@ -11,7 +11,7 @@ interface VoteButtonsProps {
   onVoteChange?: () => void
 }
 
-type VoteType = 'agree' | 'disagree' | null
+
 
 export function VoteButtons({ billId, className = '', onVoteChange }: VoteButtonsProps) {
   const [loading, setLoading] = useState(false)
@@ -75,7 +75,7 @@ export function VoteButtons({ billId, className = '', onVoteChange }: VoteButton
     }
 
     loadCurrentVote()
-  }, [billId, supabase])
+  }, [billId, supabase, setVote])
 
   const handleVote = async (voteType: 'agree' | 'disagree') => {
     if (loading) return

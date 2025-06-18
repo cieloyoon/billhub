@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { FavoriteButton } from '@/components/favorite-button'
@@ -114,24 +114,7 @@ export default function BillPage() {
     }
   }, [])
 
-  // 전체 데이터 가져오기 (필터/검색 변경 시에만)
-  useEffect(() => {
-    fetchAllBills()
-  }, [debouncedSearchTerm, filters])
-  
-  // 페이지네이션 처리 (currentPage나 전체 데이터 변경 시)
-  useEffect(() => {
-    applyPagination(false) // 필터/검색 변경 시에는 스크롤 안함
-  }, [allData, debouncedSearchTerm, filters])
-  
-  // 페이지 변경 시에만 스크롤
-  useEffect(() => {
-    if (allData.length > 0) {
-      applyPagination(true) // 페이지 변경 시에는 스크롤
-    }
-  }, [currentPage])
-
-  const fetchAllBills = async () => {
+  const fetchAllBills = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -156,7 +139,7 @@ export default function BillPage() {
       console.log('검색 필드:', searchFields)
       
       // 모든 데이터 가져오기 (1000개씩 여러 번 요청)
-      let allData: any[] = []
+      let allData: Bill[] = []
       let from = 0
       const batchSize = 1000
       
@@ -187,7 +170,7 @@ export default function BillPage() {
       }
 
       console.log(`전체 데이터 로딩 완료: ${allData.length}개`)
-      console.log('첫 5개 법안번호:', allData.slice(0, 5).map((d: any) => d.bill_no))
+      console.log('첫 5개 법안번호:', allData.slice(0, 5).map((d: Bill) => d.bill_no))
 
       // 전체 데이터를 state에 저장
       setAllData(allData)
@@ -203,9 +186,9 @@ export default function BillPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [debouncedSearchTerm, filters, searchFields])
 
-  const applyPagination = (shouldScroll: boolean = false) => {
+  const applyPagination = useCallback((shouldScroll: boolean = false) => {
     if (allData.length === 0) return
 
     // 클라이언트에서 필터링
@@ -213,7 +196,7 @@ export default function BillPage() {
 
     // 검색 조건 적용
     if (debouncedSearchTerm) {
-      filteredData = filteredData.filter((bill: any) => {
+      filteredData = filteredData.filter((bill: Bill) => {
         const searchLower = debouncedSearchTerm.toLowerCase()
         return (
           (searchFields.bill_name && bill.bill_name?.toLowerCase().includes(searchLower)) ||
@@ -226,17 +209,17 @@ export default function BillPage() {
 
     // 필터 조건 적용
     if (filters.general_result) {
-      filteredData = filteredData.filter((bill: any) => bill.general_result === filters.general_result)
+      filteredData = filteredData.filter((bill: Bill) => bill.general_result === filters.general_result)
     }
     if (filters.proc_stage_cd) {
-      filteredData = filteredData.filter((bill: any) => bill.proc_stage_cd === filters.proc_stage_cd)
+      filteredData = filteredData.filter((bill: Bill) => bill.proc_stage_cd === filters.proc_stage_cd)
     }
     if (filters.pass_gubn) {
-      filteredData = filteredData.filter((bill: any) => bill.pass_gubn === filters.pass_gubn)
+      filteredData = filteredData.filter((bill: Bill) => bill.pass_gubn === filters.pass_gubn)
     }
 
     // 클라이언트에서 정렬 (숫자는 내림차순, ZZ등은 뒤로)
-    const sortedData = filteredData.sort((a: any, b: any) => {
+    const sortedData = filteredData.sort((a: Bill, b: Bill) => {
       const aIsNumber = /^\d/.test(a.bill_no || '')
       const bIsNumber = /^\d/.test(b.bill_no || '')
       
@@ -260,8 +243,8 @@ export default function BillPage() {
     const endIndex = startIndex + itemsPerPage
     const paginatedData = sortedData.slice(startIndex, endIndex)
 
-    console.log('정렬된 데이터 첫 10개 법안번호:', sortedData.slice(0, 10).map((d: any) => d.bill_no))
-    console.log('현재 페이지 데이터:', paginatedData.map((d: any) => d.bill_no))
+    console.log('정렬된 데이터 첫 10개 법안번호:', sortedData.slice(0, 10).map((d: Bill) => d.bill_no))
+    console.log('현재 페이지 데이터:', paginatedData.map((d: Bill) => d.bill_no))
 
     setBills(paginatedData)
     setTotalCount(sortedData.length)
@@ -270,7 +253,26 @@ export default function BillPage() {
     if (shouldScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
-  }
+  }, [allData, debouncedSearchTerm, filters, searchFields, currentPage])
+
+  // 전체 데이터 가져오기 (필터/검색 변경 시에만)
+  useEffect(() => {
+    fetchAllBills()
+  }, [fetchAllBills])
+  
+  // 페이지네이션 처리 (필터/검색 변경 시)
+  useEffect(() => {
+    if (allData.length > 0) {
+      applyPagination(false) // 필터/검색 변경 시에는 스크롤 안함
+    }
+  }, [allData, debouncedSearchTerm, filters, searchFields, applyPagination])
+  
+  // 페이지 변경 시에만 스크롤
+  useEffect(() => {
+    if (allData.length > 0) {
+      applyPagination(true) // 페이지 변경 시에는 스크롤
+    }
+  }, [currentPage, applyPagination])
 
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     setFilters(prev => ({
@@ -566,7 +568,7 @@ export default function BillPage() {
                 {/* 검색 팁 */}
                 <div className="mt-3 text-xs text-gray-600 bg-blue-50 p-3 rounded">
                   <strong>검색 팁:</strong> 여러 필드를 선택하면 OR 조건으로 검색됩니다. 
-                  정확한 문구를 찾으려면 따옴표를 사용하세요.
+                  정확한 문구를 찾으려면 &quot;따옴표&quot;를 사용하세요.
                 </div>
               </div>
             )}

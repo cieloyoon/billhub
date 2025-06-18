@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { FavoriteButton } from '@/components/favorite-button'
@@ -34,11 +34,7 @@ export default function MyBillPage() {
   const [voteRefreshTrigger, setVoteRefreshTrigger] = useState(0)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadFavorites()
-  }, [])
-
-  const loadFavorites = async () => {
+  const loadFavorites = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -83,7 +79,11 @@ export default function MyBillPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadFavorites()
+  }, [loadFavorites])
 
   const handleRemoveFavorite = (billId: string) => {
     setFavorites(prev => prev.filter(fav => fav.bill_id !== billId))
