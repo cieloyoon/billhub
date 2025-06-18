@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
+import { getSiteUrl } from "@/lib/env"
 import { SupabaseClient } from "@supabase/supabase-js"
 import { useEffect, useState } from "react"
 
@@ -27,7 +28,7 @@ export default function SocialLoginButtons() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${getSiteUrl()}/auth/callback`,
           ...(provider === 'google' && {
             queryParams: {
               access_type: 'offline',
