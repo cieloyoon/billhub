@@ -13,8 +13,8 @@ export async function createClient() {
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
         signOut: () => Promise.resolve({ error: null }),
       },
-      from: (_table: string) => ({
-        select: (_columns?: string) => ({
+      from: () => ({
+        select: () => ({
           gte: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
           eq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
           order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
