@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type SupabaseClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseConfig } from "@/lib/env";
 
@@ -13,8 +13,8 @@ export async function createClient() {
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
         signOut: () => Promise.resolve({ error: null }),
       },
-      from: (table: string) => ({
-        select: (columns?: string) => ({
+      from: (_table: string) => ({
+        select: (_columns?: string) => ({
           gte: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
           eq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
           order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
@@ -26,7 +26,7 @@ export async function createClient() {
         delete: () => Promise.resolve({ data: null, error: null }),
         upsert: () => Promise.resolve({ data: null, error: null }),
       }),
-    } as any;
+    } as SupabaseClient;
     
     return dummyClient;
   }
