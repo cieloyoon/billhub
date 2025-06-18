@@ -6,6 +6,19 @@ interface Favorite {
   created_at: string
 }
 
+interface Bill {
+  id: string
+  bill_id: string
+  bill_no: string
+  bill_name: string
+  proposer_kind: string
+  propose_dt: string
+  general_result: string
+  proc_stage_cd: string
+  pass_gubn: string
+  summary: string
+}
+
 export async function GET() {
   try {
     console.log('Starting GET /api/favorites')
@@ -60,10 +73,10 @@ export async function GET() {
     }
 
     // 즐겨찾기와 법안 정보 합치기
-    const favorites = favoritesList.map(favorite => ({
+    const favorites = favoritesList.map((favorite: Favorite) => ({
       bill_id: favorite.bill_id,
       created_at: favorite.created_at,
-      bills: bills?.find(bill => bill.bill_id === favorite.bill_id) || null
+      bills: bills?.find((bill: Bill) => bill.bill_id === favorite.bill_id) || null
     }))
 
     return NextResponse.json({ favorites })
