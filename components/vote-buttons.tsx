@@ -11,6 +11,10 @@ interface VoteButtonsProps {
   onVoteChange?: () => void
 }
 
+interface Vote {
+  vote_type: 'agree' | 'disagree'
+}
+
 
 
 export function VoteButtons({ billId, className = '', onVoteChange }: VoteButtonsProps) {
@@ -29,8 +33,8 @@ export function VoteButtons({ billId, className = '', onVoteChange }: VoteButton
         .select('vote_type')
         .eq('bill_id', billId)
 
-      const agreeCount = votes?.filter(vote => vote.vote_type === 'agree').length || 0
-      const disagreeCount = votes?.filter(vote => vote.vote_type === 'disagree').length || 0
+      const agreeCount = votes?.filter((vote: Vote) => vote.vote_type === 'agree').length || 0
+      const disagreeCount = votes?.filter((vote: Vote) => vote.vote_type === 'disagree').length || 0
 
       await supabase
         .from('bill_vote_stats')
