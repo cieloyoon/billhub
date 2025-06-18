@@ -1,4 +1,5 @@
-import { createServerClient, type SupabaseClient } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { getSupabaseConfig } from "@/lib/env";
 
@@ -26,7 +27,7 @@ export async function createClient() {
         delete: () => Promise.resolve({ data: null, error: null }),
         upsert: () => Promise.resolve({ data: null, error: null }),
       }),
-    } as SupabaseClient;
+    } as unknown as SupabaseClient;
     
     return dummyClient;
   }
