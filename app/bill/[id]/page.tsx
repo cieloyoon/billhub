@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { ArrowLeft } from 'lucide-react'
 import { FavoriteButton } from '@/components/favorite-button'
 import { VoteButtons } from '@/components/vote-buttons'
@@ -81,7 +81,7 @@ export default function BillDetailPage() {
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [additionalLoading, setAdditionalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [supabase, setSupabase] = useState<any>(null)
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const { isFavorited, toggleFavorite } = useFavorites()
 
   const billId = params?.id as string

@@ -2,10 +2,11 @@
 
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
+import { SupabaseClient } from "@supabase/supabase-js"
 import { useEffect, useState } from "react"
 
 export default function SocialLoginButtons() {
-  const [supabase, setSupabase] = useState<any>(null)
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {

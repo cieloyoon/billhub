@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { FavoriteButton } from '@/components/favorite-button'
 import { VoteButtons } from '@/components/vote-buttons'
 import { VoteStats } from '@/components/vote-stats'
@@ -31,7 +32,7 @@ export default function MyBillPage() {
   const [favorites, setFavorites] = useState<FavoriteBill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [supabase, setSupabase] = useState<any>(null)
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
 
   useEffect(() => {
     try {

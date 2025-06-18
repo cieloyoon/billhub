@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { FavoriteButton } from '@/components/favorite-button'
 import { VoteButtons } from '@/components/vote-buttons'
@@ -96,7 +96,7 @@ export default function BillPage() {
   })
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const [supabase, setSupabase] = useState<any>(null)
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const itemsPerPage = 20
   const { isFavorited, toggleFavorite } = useFavorites()
 
