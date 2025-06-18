@@ -9,6 +9,9 @@ import { VoteStats } from '@/components/vote-stats'
 import { useFavorites } from '@/hooks/use-favorites'
 import { formatDateUTC } from '@/lib/utils'
 
+// 동적 렌더링 강제 - 프리렌더링 비활성화
+export const dynamic = 'force-dynamic'
+
 interface Bill {
   id: number
   bill_id: string
@@ -78,6 +81,7 @@ export default function BillPage() {
   const [allData, setAllData] = useState<Bill[]>([]) // 전체 데이터 캐시
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [searchHistory, setSearchHistory] = useState<string[]>([])
@@ -100,8 +104,18 @@ export default function BillPage() {
   const itemsPerPage = 20
   const { isFavorited, toggleFavorite } = useFavorites()
 
+  // 컴포넌트 마운트 확인
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // Supabase 클라이언트 초기화
   useEffect(() => {
+    // 클라이언트 사이드에서만 실행되도록 보장
+    if (!mounted || typeof window === 'undefined') {
+      return
+    }
+    
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     
@@ -118,7 +132,7 @@ export default function BillPage() {
       setError('Supabase 클라이언트 초기화 실패')
       setLoading(false)
     }
-  }, [])
+  }, [mounted])
 
   // Load search history from localStorage
   useEffect(() => {
@@ -129,7 +143,10 @@ export default function BillPage() {
   }, [])
 
   const fetchAllBills = useCallback(async () => {
-    if (!supabase) return
+    if (!supabase) {
+      console.log('Supabase client not ready yet')
+      return
+    }
     
     try {
       setLoading(true)
@@ -354,6 +371,17 @@ export default function BillPage() {
       default:
         return 'bg-gray-100 text-gray-800'
     }
+  }
+
+  // 컴포넌트가 마운트되지 않았을 때
+  if (!mounted) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    )
   }
 
   if (loading && bills.length === 0) {
