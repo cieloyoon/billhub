@@ -15,7 +15,7 @@ import {
 } from "./ui/dropdown-menu"
 import { LogOut, User, Settings } from "lucide-react"
 import { createClient, isConfigured } from "@/lib/supabase/client"
-import type { User as SupabaseUser } from "@supabase/supabase-js"
+import type { User as SupabaseUser, AuthChangeEvent } from "@supabase/supabase-js"
 
 export function HeaderAuth() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
@@ -52,7 +52,7 @@ export function HeaderAuth() {
     // 인증 상태 변화 감지
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
