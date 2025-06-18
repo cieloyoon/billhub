@@ -25,7 +25,7 @@ export function createClient() {
         update: () => Promise.resolve({ data: null, error: null }),
         delete: () => Promise.resolve({ data: null, error: null }),
       }),
-    } as any;
+    } as ReturnType<typeof createBrowserClient>;
     
     return dummyClient;
   }
