@@ -93,10 +93,10 @@ export function HeaderAuth() {
   if (!user) {
     return (
       <div className="flex gap-2">
-        <Button asChild size="sm" variant="ghost">
+        <Button asChild size="sm" variant="ghost" className="mobile-button">
           <Link href="/auth/login">로그인</Link>
         </Button>
-        <Button asChild size="sm" variant="default">
+        <Button asChild size="sm" variant="default" className="mobile-button">
           <Link href="/auth/sign-up">회원가입</Link>
         </Button>
       </div>

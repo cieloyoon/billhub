@@ -4,11 +4,21 @@ import Link from "next/link"
 import "./globals.css"
 import { HeaderAuth } from "@/components/header-auth"
 import { BillSyncProvider } from "@/hooks/use-bill-sync"
-
+import { BottomNav } from "@/components/bottom-nav"
 
 export const metadata: Metadata = {
   title: "Billhub",
   description: "법률 정보 관리 시스템",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "white" },
+    { media: "(prefers-color-scheme: dark)", color: "black" }
+  ],
 }
 
 export default function RootLayout({
@@ -18,75 +28,61 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body className="min-h-screen bg-background font-sans antialiased">
+      <body className="min-h-screen bg-background font-sans antialiased touch-optimized mobile-scroll">
         <BillSyncProvider>
           <div className="relative flex min-h-screen flex-col">
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="mx-auto flex h-14 max-w-screen-2xl items-center px-4">
-              <div className="mr-4 hidden md:flex">
-                <Link className="mr-6 flex items-center space-x-2" href="/">
-                  <div className="h-6 w-6 rounded-sm bg-primary" />
-                  <span className="hidden font-bold sm:inline-block">
-                    Billhub
-                  </span>
-                </Link>
-                <nav className="flex items-center space-x-6 text-sm font-medium">
-                  <Link
-                    className="transition-colors hover:text-foreground/80 text-foreground"
-                    href="/bill"
-                  >
-                    Bill
+              <div className="mx-auto flex h-14 max-w-screen-2xl items-center px-4">
+                {/* Mobile logo (left) */}
+                <div className="flex md:hidden">
+                  <Link className="flex items-center space-x-2 touch-optimized" href="/">
+                    <div className="h-6 w-6 rounded-sm bg-primary" />
+                    <span className="font-bold">Billhub</span>
                   </Link>
-
-                  <Link
-                    className="transition-colors hover:text-foreground/80 text-foreground/60"
-                    href="/bill/mybill"
-                  >
-                    MyBill
+                </div>
+                
+                {/* Desktop navigation */}
+                <div className="mr-4 hidden md:flex">
+                  <Link className="mr-6 flex items-center space-x-2" href="/">
+                    <div className="h-6 w-6 rounded-sm bg-primary" />
+                    <span className="hidden font-bold sm:inline-block">
+                      Billhub
+                    </span>
                   </Link>
-                  <Link
-                    className="transition-colors hover:text-foreground/80 text-foreground/60"
-                    href="/bill/updatedbill"
-                  >
-                    UpdatedBill
-                  </Link>
-                  <a
-                    className="transition-colors hover:text-foreground/80 text-foreground/60"
-                    href="/charts"
-                  >
-                    Charts
-                  </a>
-                  <a
-                    className="transition-colors hover:text-foreground/80 text-foreground/60"
-                    href="/themes"
-                  >
-                    Themes
-                  </a>
-                  <a
-                    className="transition-colors hover:text-foreground/80 text-foreground/60"
-                    href="/examples"
-                  >
-                    Examples
-                  </a>
-                  <a
-                    className="transition-colors hover:text-foreground/80 text-foreground/60"
-                    href="/colors"
-                  >
-                    Colors
-                  </a>
-                </nav>
+                  <nav className="flex items-center space-x-6 text-sm font-medium">
+                    <Link
+                      className="transition-colors hover:text-foreground/80 text-foreground touch-optimized"
+                      href="/bill"
+                    >
+                      Bill
+                    </Link>
+                    <Link
+                      className="transition-colors hover:text-foreground/80 text-foreground/60 touch-optimized"
+                      href="/bill/mybill"
+                    >
+                      MyBill
+                    </Link>
+                    <Link
+                      className="transition-colors hover:text-foreground/80 text-foreground/60 touch-optimized"
+                      href="/bill/updatedbill"
+                    >
+                      UpdatedBill
+                    </Link>
+                  </nav>
+                </div>
+                
+                <div className="flex flex-1 items-center justify-end space-x-2">
+                  <nav className="flex items-center space-x-2">
+                    <HeaderAuth />
+                  </nav>
+                </div>
               </div>
-              <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
-                <nav className="flex items-center space-x-2">
-                  <HeaderAuth />
-                </nav>
-              </div>
-            </div>
-          </header>
-          <main className="flex-1">
-            {children}
-          </main>
-        </div>
+            </header>
+            <main className="flex-1 pb-16 md:pb-0">
+              {children}
+            </main>
+            <BottomNav />
+          </div>
         </BillSyncProvider>
       </body>
     </html>
