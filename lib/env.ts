@@ -3,13 +3,15 @@ export function getSupabaseConfig() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
   if (!url || !key) {
-    if (typeof window === 'undefined') {
-      // 서버 환경에서는 로그만 남기고 에러를 던지지 않음
-      console.warn('Supabase environment variables are missing');
-      return null;
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Supabase environment variables are missing in development');
     }
-    throw new Error('Missing Supabase environment variables');
+    return null;
   }
   
   return { url, key };
+}
+
+export function isSupabaseConfigured(): boolean {
+  return getSupabaseConfig() !== null;
 } 

@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import SocialLoginButtons from "./SocialLoginButtons"
 
 export function LoginForm({
@@ -25,11 +25,22 @@ export function LoginForm({
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    try {
+      const client = createClient()
+      setSupabase(client)
+    } catch {
+      setError("로그인 서비스에 연결할 수 없습니다.")
+    }
+  }, [])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
+    if (!supabase) return
+    
     setIsLoading(true)
     setError(null)
 
@@ -47,7 +58,7 @@ export function LoginForm({
     }
   }
 
-
+  const isFormDisabled = !supabase || isLoading
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -75,6 +86,7 @@ export function LoginForm({
                     type="email"
                     placeholder="example@email.com"
                     required
+                    disabled={isFormDisabled}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -93,13 +105,14 @@ export function LoginForm({
                     id="password" 
                     type="password" 
                     required 
+                    disabled={isFormDisabled}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "로그인 중..." : "로그인"}
+                <Button type="submit" className="w-full" disabled={isFormDisabled}>
+                  {isLoading ? "로그인 중..." : !supabase ? "로딩 중..." : "로그인"}
                 </Button>
               </div>
             </form>

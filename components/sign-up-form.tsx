@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import SocialLoginButtons from "./SocialLoginButtons";
 
 export function SignUpForm({
@@ -26,11 +26,22 @@ export function SignUpForm({
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const client = createClient();
+      setSupabase(client);
+    } catch {
+      setError("회원가입 서비스에 연결할 수 없습니다.");
+    }
+  }, []);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
+    if (!supabase) return;
+    
     setIsLoading(true);
     setError(null);
 
@@ -57,7 +68,7 @@ export function SignUpForm({
     }
   };
 
-
+  const isFormDisabled = !supabase || isLoading;
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -83,6 +94,7 @@ export function SignUpForm({
                     type="email"
                     placeholder="example@email.com"
                     required
+                    disabled={isFormDisabled}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -95,6 +107,7 @@ export function SignUpForm({
                     id="password"
                     type="password"
                     required
+                    disabled={isFormDisabled}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -107,13 +120,14 @@ export function SignUpForm({
                     id="repeat-password"
                     type="password"
                     required
+                    disabled={isFormDisabled}
                     value={repeatPassword}
                     onChange={(e) => setRepeatPassword(e.target.value)}
                   />
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "계정 생성 중..." : "회원가입"}
+                <Button type="submit" className="w-full" disabled={isFormDisabled}>
+                  {isLoading ? "계정 생성 중..." : !supabase ? "로딩 중..." : "회원가입"}
                 </Button>
               </div>
             </form>
