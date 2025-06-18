@@ -221,14 +221,7 @@ export default function BillPageClient() {
     }
   }, [fetchAllBills, supabase, mounted])
 
-  // Debounced search effect
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [searchTerm])
+  // 더 이상 자동 debounce를 사용하지 않음 - 엔터나 검색 버튼으로만 검색
 
   // Process and filter data
   useEffect(() => {
@@ -428,8 +421,9 @@ export default function BillPageClient() {
                 onChange={(e) => {
                   setSearchTerm(e.target.value)
                 }}
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
+                    e.preventDefault()
                     handleSearchSubmit(searchTerm)
                   }
                 }}
