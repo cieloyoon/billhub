@@ -31,9 +31,21 @@ export default function MyBillPage() {
   const [favorites, setFavorites] = useState<FavoriteBill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const supabase = createClient()
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
+
+  useEffect(() => {
+    try {
+      const client = createClient()
+      setSupabase(client)
+    } catch {
+      setError('서비스에 연결할 수 없습니다.')
+      setLoading(false)
+    }
+  }, [])
 
   const loadFavorites = useCallback(async () => {
+    if (!supabase) return
+    
     try {
       setLoading(true)
       setError(null)
@@ -81,14 +93,14 @@ export default function MyBillPage() {
   }, [supabase])
 
   useEffect(() => {
-    loadFavorites()
-  }, [loadFavorites])
+    if (supabase) {
+      loadFavorites()
+    }
+  }, [supabase, loadFavorites])
 
   const handleRemoveFavorite = (billId: string) => {
     setFavorites(prev => prev.filter(fav => fav.bill_id !== billId))
   }
-
-
 
   const getStatusBadgeColor = (status: string | null) => {
     if (!status) return 'bg-gray-100 text-gray-800'

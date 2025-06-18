@@ -32,10 +32,6 @@ interface FilterState {
   pass_gubn: string
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabase = createClient(supabaseUrl, supabaseKey)
-
 // 필터 옵션들
 // 처리결과 (의미별 순서)
 const GENERAL_RESULT_OPTIONS = [
@@ -100,10 +96,29 @@ export default function BillPage() {
   })
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
   const itemsPerPage = 20
   const { isFavorited, toggleFavorite } = useFavorites()
 
-  // 검색 버튼 클릭 시에만 검색 실행 (자동 디바운스 제거)
+  // Supabase 클라이언트 초기화
+  useEffect(() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      setError('Supabase 연결 정보가 설정되지 않았습니다.')
+      setLoading(false)
+      return
+    }
+    
+    try {
+      const client = createClient(supabaseUrl, supabaseKey)
+      setSupabase(client)
+    } catch (err) {
+      setError('Supabase 클라이언트 초기화 실패')
+      setLoading(false)
+    }
+  }, [])
 
   // Load search history from localStorage
   useEffect(() => {
@@ -114,13 +129,11 @@ export default function BillPage() {
   }, [])
 
   const fetchAllBills = useCallback(async () => {
+    if (!supabase) return
+    
     try {
       setLoading(true)
       setError(null)
-      
-      // 환경변수 확인
-      console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Not set')
-      console.log('Supabase Key:', supabaseKey ? 'Set' : 'Not set')
       
       // 기본 연결 테스트
       const testQuery = supabase.from('bills').select('count', { count: 'exact', head: true })
@@ -131,7 +144,7 @@ export default function BillPage() {
         throw new Error(`데이터베이스 연결 실패: ${testResult.error.message}`)
       }
       
-            console.log('=== 쿼리 디버깅 ===')
+      console.log('=== 쿼리 디버깅 ===')
       console.log('검색어:', debouncedSearchTerm)
       console.log('필터:', filters)
       console.log('현재 페이지:', currentPage)
@@ -185,7 +198,7 @@ export default function BillPage() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearchTerm, filters, searchFields, currentPage])
+  }, [supabase, debouncedSearchTerm, filters, searchFields, currentPage])
 
   const applyPagination = useCallback((shouldScroll: boolean = false) => {
     if (allData.length === 0) return
@@ -254,10 +267,12 @@ export default function BillPage() {
     }
   }, [allData, debouncedSearchTerm, filters, searchFields, currentPage])
 
-  // 전체 데이터 가져오기 (필터/검색 변경 시에만)
+  // 전체 데이터 가져오기 (Supabase 클라이언트 준비되었을 때)
   useEffect(() => {
-    fetchAllBills()
-  }, [fetchAllBills])
+    if (supabase) {
+      fetchAllBills()
+    }
+  }, [supabase, fetchAllBills])
   
   // 페이지네이션 처리 (필터/검색 변경 시)
   useEffect(() => {
@@ -325,8 +340,6 @@ export default function BillPage() {
   }
 
   const totalPages = Math.ceil(totalCount / itemsPerPage)
-
-
 
   const getStatusBadgeColor = (status: string | null) => {
     switch (status) {

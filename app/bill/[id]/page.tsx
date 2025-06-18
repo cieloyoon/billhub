@@ -70,10 +70,6 @@ interface AdditionalApiInfo {
   additional?: AdditionalBillInfo | { error: string } | string
 }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabase = createClient(supabaseUrl, supabaseKey)
-
 export default function BillDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -85,11 +81,34 @@ export default function BillDetailPage() {
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [additionalLoading, setAdditionalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
   const { isFavorited, toggleFavorite } = useFavorites()
 
   const billId = params?.id as string
 
+  // Supabase 클라이언트 초기화
+  useEffect(() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseKey) {
+      setError('Supabase 연결 정보가 설정되지 않았습니다.')
+      setLoading(false)
+      return
+    }
+    
+    try {
+      const client = createClient(supabaseUrl, supabaseKey)
+      setSupabase(client)
+    } catch (err) {
+      setError('Supabase 클라이언트 초기화 실패')
+      setLoading(false)
+    }
+  }, [])
+
   const fetchBillDetails = useCallback(async () => {
+    if (!supabase) return
+    
     try {
       setLoading(true)
       setError(null)
@@ -118,7 +137,7 @@ export default function BillDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [billId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, billId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchCommissionInfo = useCallback(async (billId: string) => {
     try {
@@ -451,8 +470,6 @@ export default function BillDetailPage() {
     }
   }
 
-
-
   const getStatusBadgeColor = (status: string | null) => {
     if (!status) return 'bg-gray-100 text-gray-800'
     
@@ -472,10 +489,10 @@ export default function BillDetailPage() {
   }
 
   useEffect(() => {
-    if (billId) {
+    if (supabase && billId) {
       fetchBillDetails()
     }
-  }, [billId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, billId, fetchBillDetails])
 
   if (loading) {
     return (
