@@ -26,7 +26,6 @@ export function BillSyncProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [votes, setVotes] = useState<Map<string, 'agree' | 'disagree'>>(new Map())
   const [statsRefreshTrigger, setStatsRefreshTrigger] = useState(0)
-  const supabase = createClient()
 
   const addFavorite = useCallback((billId: string) => {
     setFavorites(prev => new Set([...prev, billId]))
