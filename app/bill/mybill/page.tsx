@@ -4,9 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { FavoriteButton } from '@/components/favorite-button'
-import { VoteButtons } from '@/components/vote-buttons'
-import { VoteStats } from '@/components/vote-stats'
+import { BillCard } from '@/components/bill-card'
 import { ArrowLeft } from 'lucide-react'
 import { formatDateUTC } from '@/lib/utils'
 
@@ -103,22 +101,7 @@ export default function MyBillPage() {
     setFavorites(prev => prev.filter(fav => fav.bill_id !== billId))
   }
 
-  const getStatusBadgeColor = (status: string | null) => {
-    if (!status) return 'bg-gray-100 text-gray-800'
-    
-    const statusColors: { [key: string]: string } = {
-      '계류의안': 'bg-yellow-100 text-yellow-800',
-      '처리의안': 'bg-green-100 text-green-800',
-      '원안가결': 'bg-green-100 text-green-800',
-      '수정가결': 'bg-blue-100 text-blue-800',
-      '부결': 'bg-red-100 text-red-800',
-      '폐기': 'bg-gray-100 text-gray-800',
-      '철회': 'bg-gray-100 text-gray-800',
-      '대안반영폐기': 'bg-purple-100 text-purple-800',
-    }
-    
-    return statusColors[status] || 'bg-gray-100 text-gray-800'
-  }
+
 
   if (loading) {
     return (
@@ -181,80 +164,14 @@ export default function MyBillPage() {
         ) : (
           <div className="space-y-4">
             {favorites.map((favorite) => (
-              <div 
-                key={favorite.bill_id} 
-                className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => router.push(`/bill/${favorite.bill_id}`)}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {favorite.bills.bill_name || '제목 없음'}
-                    </h3>
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
-                      <span>법안번호: <strong>{favorite.bills.bill_no || '-'}</strong></span>
-                      <span>제안자: <strong>{favorite.bills.proposer_kind || '-'}</strong></span>
-                      <span>제안일: <strong>{formatDateUTC(favorite.bills.propose_dt)}</strong></span>
-                      <span>즐겨찾기 추가일: <strong>{formatDateUTC(favorite.created_at)}</strong></span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 ml-4">
-                    <div className="flex items-center gap-2">
-                      <FavoriteButton 
-                        billId={favorite.bill_id}
-                        initialIsFavorited={true}
-                        onToggle={(isFav) => !isFav && handleRemoveFavorite(favorite.bill_id)}
-                      />
-                    </div>
-                    <VoteButtons 
-                      billId={favorite.bill_id} 
-                    />
-                    <VoteStats 
-                      billId={favorite.bill_id} 
-                      className="mt-2" 
-                    />
-                    {favorite.bills.pass_gubn && (
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(favorite.bills.pass_gubn)}`}>
-                        {favorite.bills.pass_gubn}
-                      </span>
-                    )}
-                    {favorite.bills.proc_stage_cd && (
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(favorite.bills.proc_stage_cd)}`}>
-                        {favorite.bills.proc_stage_cd}
-                      </span>
-                    )}
-                    {favorite.bills.general_result && (
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(favorite.bills.general_result)}`}>
-                        {favorite.bills.general_result}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {favorite.bills.summary && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">요약</h4>
-                    <p className="text-sm text-gray-600 leading-relaxed max-h-32 overflow-y-auto">
-                      {favorite.bills.summary}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                  <div className="text-xs text-gray-500">
-                    법안 ID: {favorite.bill_id}
-                  </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      router.push(`/bill/${favorite.bill_id}`)
-                    }}
-                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                  >
-                    자세히 보기
-                  </button>
-                </div>
-              </div>
+              <BillCard
+                key={favorite.bill_id}
+                bill={favorite.bills}
+                isFavorited={true}
+                onFavoriteToggle={() => {}}
+                onRemoveFavorite={handleRemoveFavorite}
+                extraDateInfo={`즐겨찾기 추가일: ${formatDateUTC(favorite.created_at)}`}
+              />
             ))}
           </div>
         )}

@@ -3,9 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
-import { FavoriteButton } from '@/components/favorite-button'
-import { VoteButtons } from '@/components/vote-buttons'
-import { VoteStats } from '@/components/vote-stats'
+import { BillCard } from '@/components/bill-card'
 import { useFavorites } from '@/hooks/use-favorites'
 import { formatDateUTC } from '@/lib/utils'
 
@@ -318,33 +316,7 @@ export default function BillPageClient() {
     setShowSearchHistory(false)
   }
 
-  const highlightSearchTerm = (text: string | null, searchTerm: string) => {
-    if (!text || !searchTerm) return text
 
-    const regex = new RegExp(`(${searchTerm})`, 'gi')
-    const parts = text.split(regex)
-    
-    return parts.map((part, index) => 
-      regex.test(part) ? 
-        <mark key={index} className="bg-yellow-200 px-1 rounded">{part}</mark> : 
-        part
-    )
-  }
-
-  const getStatusBadgeColor = (status: string | null) => {
-    switch (status) {
-      case '접수':
-        return 'bg-blue-100 text-blue-800'
-      case '소관위심사':
-        return 'bg-yellow-100 text-yellow-800'
-      case '가결':
-        return 'bg-green-100 text-green-800'
-      case '부결':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
 
   // 컴포넌트가 마운트되지 않았을 때
   if (!mounted) {
@@ -652,99 +624,13 @@ export default function BillPageClient() {
       {/* 법안 목록 */}
       <div className="space-y-4">
         {bills.map((bill) => (
-          <div key={bill.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push(`/bill/${bill.bill_id}`)}>
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {debouncedSearchTerm ? 
-                    highlightSearchTerm(bill.bill_name || '제목 없음', debouncedSearchTerm) : 
-                    (bill.bill_name || '제목 없음')
-                  }
-                </h3>
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
-                  <span>법안번호: <strong>
-                    {debouncedSearchTerm ? 
-                      highlightSearchTerm(bill.bill_no || '-', debouncedSearchTerm) : 
-                      (bill.bill_no || '-')
-                    }
-                  </strong></span>
-                  <span>제안자: <strong>
-                    {debouncedSearchTerm ? 
-                      highlightSearchTerm(bill.proposer_kind || '-', debouncedSearchTerm) : 
-                      (bill.proposer_kind || '-')
-                    }
-                  </strong></span>
-                  <span>제안일: <strong>{formatDateUTC(bill.propose_dt)}</strong></span>
-                  {bill.proc_dt && (
-                    <span>처리일: <strong>{formatDateUTC(bill.proc_dt)}</strong></span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 ml-4">
-                <div className="flex items-center gap-2">
-                  <FavoriteButton 
-                    billId={bill.bill_id}
-                    initialIsFavorited={isFavorited(bill.bill_id)}
-                    onToggle={(isFav) => toggleFavorite(bill.bill_id, isFav)}
-                  />
-                </div>
-                <VoteButtons 
-                  billId={bill.bill_id} 
-                />
-                <VoteStats 
-                  billId={bill.bill_id} 
-                  className="mt-2" 
-                />
-                {bill.pass_gubn && (
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(bill.pass_gubn)}`}>
-                    {bill.pass_gubn}
-                  </span>
-                )}
-                {bill.proc_stage_cd && (
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(bill.proc_stage_cd)}`}>
-                    {bill.proc_stage_cd}
-                  </span>
-                )}
-                {bill.general_result && (
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(bill.general_result)}`}>
-                    {bill.general_result}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {bill.summary && (
-              <div className="mb-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">요약</h4>
-                <p className="text-sm text-gray-600 leading-relaxed max-h-32 overflow-y-auto">
-                  {debouncedSearchTerm ? 
-                    highlightSearchTerm(bill.summary, debouncedSearchTerm) : 
-                    bill.summary
-                  }
-                </p>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-              <div className="text-xs text-gray-500">
-                생성: {formatDateUTC(bill.created_at)} | 수정: {formatDateUTC(bill.updated_at)}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-xs text-gray-400">
-                  ID: {bill.bill_id}
-                </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    router.push(`/bill/${bill.bill_id}`)
-                  }}
-                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                >
-                  자세히 보기
-                </button>
-              </div>
-            </div>
-          </div>
+          <BillCard
+            key={bill.id}
+            bill={bill}
+            searchTerm={debouncedSearchTerm}
+            isFavorited={isFavorited(bill.bill_id)}
+            onFavoriteToggle={(billId, isFav) => toggleFavorite(billId, isFav)}
+          />
         ))}
       </div>
 
