@@ -6,7 +6,29 @@ export async function createClient() {
   const config = getSupabaseConfig();
   
   if (!config) {
-    throw new Error('Supabase configuration is not available');
+    // 환경변수가 없을 때 더미 클라이언트 반환
+    const dummyClient = {
+      auth: {
+        getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signOut: () => Promise.resolve({ error: null }),
+      },
+      from: (table: string) => ({
+        select: (columns?: string) => ({
+          gte: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
+          eq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
+          order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
+          limit: () => Promise.resolve({ data: [], error: null }),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        }),
+        insert: () => Promise.resolve({ data: null, error: null }),
+        update: () => Promise.resolve({ data: null, error: null }),
+        delete: () => Promise.resolve({ data: null, error: null }),
+        upsert: () => Promise.resolve({ data: null, error: null }),
+      }),
+    } as any;
+    
+    return dummyClient;
   }
   
   const cookieStore = await cookies();
