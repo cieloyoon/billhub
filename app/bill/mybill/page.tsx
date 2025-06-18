@@ -31,7 +31,7 @@ export default function MyBillPage() {
   const [favorites, setFavorites] = useState<FavoriteBill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
+  const [supabase, setSupabase] = useState<any>(null)
 
   useEffect(() => {
     try {

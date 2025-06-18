@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useEffect, useState } from "react"
 
 export default function SocialLoginButtons() {
-  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
+  const [supabase, setSupabase] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {

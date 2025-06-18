@@ -96,7 +96,7 @@ export default function BillPage() {
   })
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
+  const [supabase, setSupabase] = useState<any>(null)
   const itemsPerPage = 20
   const { isFavorited, toggleFavorite } = useFavorites()
 

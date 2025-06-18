@@ -81,7 +81,7 @@ export default function BillDetailPage() {
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [additionalLoading, setAdditionalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
+  const [supabase, setSupabase] = useState<any>(null)
   const { isFavorited, toggleFavorite } = useFavorites()
 
   const billId = params?.id as string
