@@ -86,7 +86,6 @@ export default function BillDetailPage() {
   const [additionalLoading, setAdditionalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { isFavorited, toggleFavorite } = useFavorites()
-  const [voteRefreshTrigger, setVoteRefreshTrigger] = useState(0)
 
   const billId = params?.id as string
 
@@ -119,9 +118,9 @@ export default function BillDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [billId])
+  }, [billId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchCommissionInfo = async (billId: string) => {
+  const fetchCommissionInfo = useCallback(async (billId: string) => {
     try {
       setCommissionLoading(true)
       
@@ -153,9 +152,9 @@ export default function BillDetailPage() {
     } finally {
       setCommissionLoading(false)
     }
-  }
+  }, [])
 
-  const fetchAdditionalApis = async (billId: string) => {
+  const fetchAdditionalApis = useCallback(async (billId: string) => {
     try {
       setAdditionalLoading(true)
       console.log('추가 API들 호출 시작:', billId)
@@ -183,25 +182,22 @@ export default function BillDetailPage() {
               rawResults[api.name] = data
               
               // XML 파싱 적용
-              let parsedData: unknown
               switch (api.name) {
                 case 'deliberate':
-                  parsedData = parseDeliberateXML(data)
+                  results.deliberate = parseDeliberateXML(data)
                   break
                 case 'transferred':
-                  parsedData = parseTransferredXML(data)
+                  results.transferred = parseTransferredXML(data)
                   break
                 case 'promulgation':
-                  parsedData = parsePromulgationXML(data)
+                  results.promulgation = parsePromulgationXML(data)
                   break
                 case 'additional':
-                  parsedData = parseAdditionalXML(data)
+                  results.additional = parseAdditionalXML(data)
                   break
                 default:
-                  parsedData = data
+                  break
               }
-              
-              results[api.name as keyof AdditionalApiInfo] = parsedData
             } else {
               console.warn(`${api.name} API 실패:`, response.status)
               results[api.name as keyof AdditionalApiInfo] = { error: `${response.status} ${response.statusText}` }
@@ -222,7 +218,7 @@ export default function BillDetailPage() {
     } finally {
       setAdditionalLoading(false)
     }
-  }
+  }, [])
 
   const parseDeliberateXML = (xmlData: string): DeliberateInfo => {
     try {
@@ -441,8 +437,8 @@ export default function BillDetailPage() {
         if (confName) {
           result.proceedings.push({
             name: confName,
-            date: confDt,
-            result: confResult
+            date: confDt || undefined,
+            result: confResult || undefined
           })
         }
       })
@@ -479,7 +475,7 @@ export default function BillDetailPage() {
     if (billId) {
       fetchBillDetails()
     }
-  }, [billId, fetchBillDetails])
+  }, [billId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -560,7 +556,6 @@ export default function BillDetailPage() {
             <div className="flex items-center gap-4">
               <VoteButtons 
                 billId={bill.bill_id} 
-                onVoteChange={() => setVoteRefreshTrigger(prev => prev + 1)}
               />
               <FavoriteButton 
                 billId={bill.bill_id}
@@ -630,7 +625,6 @@ export default function BillDetailPage() {
             <h3 className="text-lg font-medium text-gray-900 mb-3">시민 의견</h3>
             <VoteStats 
               billId={bill.bill_id} 
-              refreshTrigger={voteRefreshTrigger}
             />
           </div>
 
@@ -659,7 +653,7 @@ export default function BillDetailPage() {
             <div className="space-y-4">
               {commissionInfo.error ? (
                 <div className="text-red-600 bg-red-50 p-4 rounded-lg">
-                  <p>⚠️ {commissionInfo.error}</p>
+                  <p>⚠️ {String(commissionInfo.error)}</p>
                 </div>
               ) : (
                 <>
@@ -674,13 +668,13 @@ export default function BillDetailPage() {
                   {commissionInfo.result && (
                     <div className="bg-green-50 p-4 rounded-lg">
                       <h4 className="font-medium text-green-900 mb-2">심사결과</h4>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeColor(commissionInfo.result)}`}>
-                        {commissionInfo.result}
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeColor(String(commissionInfo.result))}`}>
+                        {String(commissionInfo.result)}
                       </span>
                     </div>
                   )}
 
-                  {commissionInfo.dates && commissionInfo.dates.length > 0 && (
+                  {commissionInfo.dates && Array.isArray(commissionInfo.dates) && commissionInfo.dates.length > 0 && (
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <h4 className="font-medium text-gray-900 mb-2">관련 일정</h4>
                       <div className="flex flex-wrap gap-2">
@@ -693,11 +687,11 @@ export default function BillDetailPage() {
                     </div>
                   )}
 
-                  {commissionInfo.examination_reports && commissionInfo.examination_reports.length > 0 && (
+                  {commissionInfo.examination_reports && Array.isArray(commissionInfo.examination_reports) && commissionInfo.examination_reports.length > 0 && (
                     <div className="bg-yellow-50 p-4 rounded-lg">
                       <h4 className="font-medium text-yellow-900 mb-3">관련 문서</h4>
                       <div className="space-y-2">
-                        {commissionInfo.examination_reports.map((report: any, index: number) => (
+                        {commissionInfo.examination_reports.map((report: { type: string; url: string }, index: number) => (
                           <div key={index} className="flex items-center justify-between bg-white p-3 rounded border">
                             <span className="text-yellow-800 font-medium">{report.type}</span>
                             <a
@@ -714,11 +708,11 @@ export default function BillDetailPage() {
                     </div>
                   )}
 
-                  {commissionInfo.proceedings && commissionInfo.proceedings.length > 0 && (
+                  {commissionInfo.proceedings && Array.isArray(commissionInfo.proceedings) && commissionInfo.proceedings.length > 0 && (
                     <div className="bg-purple-50 p-4 rounded-lg">
                       <h4 className="font-medium text-purple-900 mb-3">회의 진행 내역</h4>
                       <div className="space-y-3">
-                        {commissionInfo.proceedings.map((proceeding: any, index: number) => (
+                        {commissionInfo.proceedings.map((proceeding: { name: string; date: string; result: string }, index: number) => (
                           <div key={index} className="bg-white p-3 rounded border">
                             <div className="font-medium text-purple-800 mb-1">{proceeding.name}</div>
                             <div className="text-sm text-gray-600 mb-1">일시: {proceeding.date}</div>
@@ -769,7 +763,7 @@ export default function BillDetailPage() {
                  {additionalInfo.deliberate ? (
                    typeof additionalInfo.deliberate === 'object' && 'error' in additionalInfo.deliberate ? (
                      <p className="text-red-600 text-sm">
-                       {additionalInfo.deliberate.error}
+                       {String(additionalInfo.deliberate.error)}
                      </p>
                    ) : typeof additionalInfo.deliberate === 'object' ? (
                      <div className="space-y-2 text-sm">
@@ -832,7 +826,7 @@ export default function BillDetailPage() {
                  {additionalInfo.transferred ? (
                    typeof additionalInfo.transferred === 'object' && 'error' in additionalInfo.transferred ? (
                      <p className="text-red-600 text-sm">
-                       {additionalInfo.transferred.error}
+                       {String(additionalInfo.transferred.error)}
                      </p>
                    ) : typeof additionalInfo.transferred === 'object' ? (
                      <div className="space-y-2 text-sm">
@@ -877,7 +871,7 @@ export default function BillDetailPage() {
                  {additionalInfo.promulgation ? (
                    typeof additionalInfo.promulgation === 'object' && 'error' in additionalInfo.promulgation ? (
                      <p className="text-red-600 text-sm">
-                       {additionalInfo.promulgation.error}
+                       {String(additionalInfo.promulgation.error)}
                      </p>
                    ) : typeof additionalInfo.promulgation === 'object' ? (
                      <div className="space-y-2 text-sm">
@@ -934,7 +928,7 @@ export default function BillDetailPage() {
                  {additionalInfo.additional ? (
                    typeof additionalInfo.additional === 'object' && 'error' in additionalInfo.additional ? (
                      <p className="text-red-600 text-sm">
-                       {additionalInfo.additional.error}
+                       {String(additionalInfo.additional.error)}
                      </p>
                    ) : typeof additionalInfo.additional === 'object' ? (
                      <div className="space-y-2 text-sm">

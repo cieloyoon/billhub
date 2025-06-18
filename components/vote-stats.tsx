@@ -80,11 +80,11 @@ export function VoteStats({ billId, className = '' }: VoteStatsProps) {
   // 전역에서 접근할 수 있도록 window에 등록
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window[`refreshVoteStats_${billId}`] = refresh
+      (window as unknown as Record<string, unknown>)[`refreshVoteStats_${billId}`] = refresh
     }
     return () => {
       if (typeof window !== 'undefined') {
-        delete window[`refreshVoteStats_${billId}`]
+        delete (window as unknown as Record<string, unknown>)[`refreshVoteStats_${billId}`]
       }
     }
   }, [billId])

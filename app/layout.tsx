@@ -2,11 +2,6 @@ import type { Metadata } from "next"
 import type React from "react"
 import Link from "next/link"
 import "./globals.css"
-import { 
-  Search,
-  Menu
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { HeaderAuth } from "@/components/header-auth"
 import { BillSyncProvider } from "@/hooks/use-bill-sync"
 

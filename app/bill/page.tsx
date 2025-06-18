@@ -102,7 +102,6 @@ export default function BillPage() {
   const [totalCount, setTotalCount] = useState(0)
   const itemsPerPage = 20
   const { isFavorited, toggleFavorite } = useFavorites()
-  const [voteRefreshTrigger, setVoteRefreshTrigger] = useState(0)
 
   // 검색 버튼 클릭 시에만 검색 실행 (자동 디바운스 제거)
 
@@ -186,7 +185,7 @@ export default function BillPage() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearchTerm, filters, searchFields])
+  }, [debouncedSearchTerm, filters, searchFields, currentPage])
 
   const applyPagination = useCallback((shouldScroll: boolean = false) => {
     if (allData.length === 0) return
@@ -265,14 +264,14 @@ export default function BillPage() {
     if (allData.length > 0) {
       applyPagination(false) // 필터/검색 변경 시에는 스크롤 안함
     }
-  }, [allData, debouncedSearchTerm, filters, searchFields, applyPagination])
+  }, [allData.length, debouncedSearchTerm, filters, searchFields, applyPagination])
   
   // 페이지 변경 시에만 스크롤
   useEffect(() => {
     if (allData.length > 0) {
       applyPagination(true) // 페이지 변경 시에는 스크롤
     }
-  }, [currentPage, applyPagination])
+  }, [currentPage, applyPagination, allData.length])
 
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     setFilters(prev => ({
@@ -381,7 +380,7 @@ export default function BillPage() {
               <span className="text-sm font-medium text-gray-700">활성 필터:</span>
               {debouncedSearchTerm && (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  검색: "{debouncedSearchTerm}"
+                  검색: &quot;{debouncedSearchTerm}&quot;
                   <button
                     onClick={() => {
                       setSearchTerm('')
@@ -677,12 +676,10 @@ export default function BillPage() {
                 </div>
                 <VoteButtons 
                   billId={bill.bill_id} 
-                  onVoteChange={() => setVoteRefreshTrigger(prev => prev + 1)}
                 />
                 <VoteStats 
                   billId={bill.bill_id} 
                   className="mt-2" 
-                  refreshTrigger={voteRefreshTrigger}
                 />
                 {bill.pass_gubn && (
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(bill.pass_gubn)}`}>

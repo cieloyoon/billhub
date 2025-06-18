@@ -139,8 +139,11 @@ export function VoteButtons({ billId, className = '', onVoteChange }: VoteButton
       onVoteChange?.()
       
       // 통계 새로고침
-      if (typeof window !== 'undefined' && window[`refreshVoteStats_${billId}`]) {
-        window[`refreshVoteStats_${billId}`]()
+      if (typeof window !== 'undefined') {
+        const refreshFunction = (window as unknown as Record<string, unknown>)[`refreshVoteStats_${billId}`];
+        if (typeof refreshFunction === 'function') {
+          refreshFunction();
+        }
       }
     } catch (error) {
       console.error('투표 처리 오류:', error)

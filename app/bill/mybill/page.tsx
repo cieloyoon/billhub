@@ -31,7 +31,6 @@ export default function MyBillPage() {
   const [favorites, setFavorites] = useState<FavoriteBill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [voteRefreshTrigger, setVoteRefreshTrigger] = useState(0)
   const supabase = createClient()
 
   const loadFavorites = useCallback(async () => {
@@ -196,12 +195,10 @@ export default function MyBillPage() {
                     </div>
                     <VoteButtons 
                       billId={favorite.bill_id} 
-                      onVoteChange={() => setVoteRefreshTrigger(prev => prev + 1)}
                     />
                     <VoteStats 
                       billId={favorite.bill_id} 
                       className="mt-2" 
-                      refreshTrigger={voteRefreshTrigger}
                     />
                     {favorite.bills.pass_gubn && (
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(favorite.bills.pass_gubn)}`}>
