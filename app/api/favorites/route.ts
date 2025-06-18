@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+interface Favorite {
+  bill_id: string
+  created_at: string
+}
+
 export async function GET() {
   try {
     console.log('Starting GET /api/favorites')
@@ -32,7 +37,7 @@ export async function GET() {
     }
 
     // 법안 정보 가져오기
-    const billIds = favoritesList.map(fav => fav.bill_id)
+    const billIds = favoritesList.map((fav: Favorite) => fav.bill_id)
     const { data: bills, error: billsError } = await supabase
       .from('bills')
       .select(`
