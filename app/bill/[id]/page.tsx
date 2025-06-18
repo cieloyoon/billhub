@@ -100,7 +100,7 @@ export default function BillDetailPage() {
     try {
       const client = createClient(supabaseUrl, supabaseKey)
       setSupabase(client)
-    } catch (_err) {
+    } catch {
       setError('Supabase 클라이언트 초기화 실패')
       setLoading(false)
     }
