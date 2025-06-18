@@ -114,7 +114,7 @@ export default function BillPage() {
     try {
       const client = createClient(supabaseUrl, supabaseKey)
       setSupabase(client)
-    } catch (err) {
+    } catch (_err) {
       setError('Supabase 클라이언트 초기화 실패')
       setLoading(false)
     }
