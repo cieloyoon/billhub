@@ -1,6 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+interface Vote {
+  vote_type: 'agree' | 'disagree'
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -24,8 +28,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 찬성/반대 개수 계산
-    const agreeCount = votes?.filter(vote => vote.vote_type === 'agree').length || 0
-    const disagreeCount = votes?.filter(vote => vote.vote_type === 'disagree').length || 0
+    const agreeCount = votes?.filter((vote: Vote) => vote.vote_type === 'agree').length || 0
+    const disagreeCount = votes?.filter((vote: Vote) => vote.vote_type === 'disagree').length || 0
     const totalCount = agreeCount + disagreeCount
 
     return NextResponse.json({
