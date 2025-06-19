@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { Search, Filter, LayoutGrid, List, Loader2, AlertCircle } from 'lucide-react'
@@ -95,7 +95,6 @@ const FILTER_OPTIONS = {
 }
 
 export default function BillPageClient() {
-  const router = useRouter()
   const [allBills, setAllBills] = useState<Bill[]>([]) // 전체 데이터 캐시
   const [filteredBills, setFilteredBills] = useState<Bill[]>([])
   const [displayedBills, setDisplayedBills] = useState<Bill[]>([])
@@ -110,14 +109,20 @@ export default function BillPageClient() {
   const [recentBills, setRecentBills] = useState<{
     recentProposed: Bill[]
     recentProcessed: Bill[]
-    recentUpdated: any[]
+    recentUpdated: Array<{
+      bill_id: string
+      tracked_at: string
+      old_value: string
+      new_value: string
+      bills: Bill
+    }>
   }>({
     recentProposed: [],
     recentProcessed: [],
     recentUpdated: []
   })
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [sortBy, setSortBy] = useState('bill_no')
+  const [sortBy] = useState('bill_no')
   const [filters, setFilters] = useState<FilterState>({
     general_result: 'all',
     proc_stage_cd: 'all',
@@ -131,10 +136,6 @@ export default function BillPageClient() {
   const [totalCount, setTotalCount] = useState(0)
   const [activeFiltersCount, setActiveFiltersCount] = useState(0)
   
-  // 탭별 캐시된 데이터
-  const [cachedData, setCachedData] = useState<{
-    [key: string]: Bill[]
-  }>({})
   const [dataLoaded, setDataLoaded] = useState(false)
   
   const { isFavorited, toggleFavorite } = useFavorites()
@@ -342,7 +343,7 @@ export default function BillPageClient() {
   }
 
   // 전체 데이터를 페이징으로 로드
-  const loadAllBills = async () => {
+  const loadAllBills = useCallback(async () => {
     if (!supabase) return
     
     setLoading(true)
@@ -430,10 +431,10 @@ export default function BillPageClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
 
   // 클라이언트 사이드 필터링 및 표시
-  const filterAndDisplayBills = () => {
+  const filterAndDisplayBills = useCallback(() => {
     if (!allBills.length) return
     
     let filtered = [...allBills]
@@ -493,7 +494,7 @@ export default function BillPageClient() {
             bill.propose_dt && new Date(bill.propose_dt) >= daysAgo
           )
         } else {
-          filtered = filtered.filter(bill => (bill as any)[key] === value)
+          filtered = filtered.filter(bill => (bill as Record<string, unknown>)[key] === value)
         }
       }
     })
