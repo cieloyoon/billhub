@@ -232,7 +232,7 @@ export default function BillPageClient() {
         observerRef.current.disconnect()
       }
     }
-  }, [hasMore, loading, loadingMore, activeCategory, loadMoreBills])
+  }, [hasMore, loading, loadingMore, activeCategory])
 
   // 정렬 함수 분리
   const sortBills = (bills: Bill[], category?: string) => {
