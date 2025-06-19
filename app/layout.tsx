@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import type React from "react"
 import Link from "next/link"
 import "./globals.css"
@@ -9,12 +9,13 @@ import { BottomNav } from "@/components/bottom-nav"
 export const metadata: Metadata = {
   title: "Billhub",
   description: "법률 정보 관리 시스템",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "white" },
     { media: "(prefers-color-scheme: dark)", color: "black" }
@@ -64,9 +65,9 @@ export default function RootLayout({
                     </Link>
                     <Link
                       className="transition-colors hover:text-foreground/80 text-foreground/60 touch-optimized"
-                      href="/bill/updatedbill"
+                      href="/bill/notification"
                     >
-                      UpdatedBill
+                      Notification
                     </Link>
                   </nav>
                 </div>

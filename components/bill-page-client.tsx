@@ -549,8 +549,18 @@ export default function BillPageClient() {
     toggleFavorite(billId, isFav)
   }
 
-  if (!mounted) {
-    return <div>로딩 중...</div>
+  if (!mounted || loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+            <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">법안 데이터 로딩 중</h2>
+          <p className="text-gray-600">잠시만 기다려주세요...</p>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
@@ -584,11 +594,18 @@ export default function BillPageClient() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">제 22대 국회 법안</h1>
-                <p className="text-gray-600 mt-1">
-                  총 <span className="font-semibold text-blue-600">{totalCount.toLocaleString()}</span>개의 법안
-                </p>
+                {!dataLoaded ? (
+                  <div className="mt-1">
+                    <Skeleton className="h-5 w-32" />
+                  </div>
+                ) : (
+                  <p className="text-gray-600 mt-1">
+                    총 <span className="font-semibold text-blue-600">{totalCount.toLocaleString()}</span>개의 법안
+                  </p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
+              {/* 카드/목록 버튼을 데스크톱에서만 표시 */}
+              <div className="hidden md:flex items-center gap-2">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'outline'}
                   size="sm"
@@ -607,7 +624,7 @@ export default function BillPageClient() {
             </div>
 
             {/* 검색바와 필터 */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -621,7 +638,7 @@ export default function BillPageClient() {
               <div className="flex gap-2">
                 <Sheet>
                   <SheetTrigger asChild>
-                    <Button variant="outline" className="relative">
+                    <Button variant="outline" className="relative whitespace-nowrap">
                       <Filter className="h-4 w-4 mr-2" />
                       필터
                       {activeFiltersCount > 0 && (
@@ -787,7 +804,8 @@ export default function BillPageClient() {
                 <TabsTrigger
                   key={category.id}
                   value={category.id}
-                  className="flex flex-col items-center gap-1 py-3 px-4 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600"
+                  disabled={!dataLoaded}
+                  className="flex flex-col items-center gap-1 py-3 px-4 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="text-lg">{category.icon}</span>
                   <span className="text-sm font-medium">{category.name}</span>

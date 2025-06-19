@@ -9,7 +9,7 @@ const navItems = [
   { href: "/", label: "홈", icon: Home },
   { href: "/bill", label: "법안", icon: FileText },
   { href: "/bill/mybill", label: "내 법안", icon: Heart },
-  { href: "/bill/updatedbill", label: "업데이트", icon: Bell },
+  { href: "/bill/notification", label: "업데이트", icon: Bell },
 ]
 
 export function BottomNav() {
