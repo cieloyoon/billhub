@@ -16,7 +16,6 @@ export async function GET() {
       .select('*')
       .gte('propose_dt', oneWeekAgoStr)
       .order('bill_no', { ascending: false })
-      .limit(20)
 
     if (proposedError) throw proposedError
 
@@ -26,7 +25,6 @@ export async function GET() {
       .select('*')
       .gte('proc_dt', oneWeekAgoStr)
       .order('proc_dt', { ascending: false })
-      .limit(20)
 
     if (processedError) throw processedError
 
@@ -45,7 +43,7 @@ export async function GET() {
       .eq('change_type', 'stage_changed')
       .gte('tracked_at', oneWeekAgo.toISOString())
       .order('tracked_at', { ascending: false })
-      .limit(20)
+      .order('bill_no', { ascending: false })
 
     if (updatedError) throw updatedError
 

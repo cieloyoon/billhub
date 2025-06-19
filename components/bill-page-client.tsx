@@ -47,7 +47,7 @@ const CATEGORIES = [
   { id: 'all', name: '전체', description: '모든 법안', icon: '📋' },
   { id: 'pending', name: '계류중', description: '심사중인 법안', icon: '⏳' },
   { id: 'passed', name: '통과', description: '가결된 법안', icon: '✅' },
-  { id: 'rejected', name: '부결', description: '부결된 법안', icon: '❌' },
+  { id: 'rejected', name: '불성립', description: '불성립된 법안', icon: '❌' },
   { id: 'recent', name: '최근', description: '최근 30일 법안', icon: '🆕' },
 ]
 
@@ -97,7 +97,7 @@ const FILTER_OPTIONS = {
 
 export default function BillPageClient() {
   const router = useRouter()
-  const [bills, setBills] = useState<Bill[]>([])
+  const [allBills, setAllBills] = useState<Bill[]>([]) // 전체 데이터 캐시
   const [filteredBills, setFilteredBills] = useState<Bill[]>([])
   const [displayedBills, setDisplayedBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,6 +107,16 @@ export default function BillPageClient() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
+  const [recentSubTab, setRecentSubTab] = useState('proposed')
+  const [recentBills, setRecentBills] = useState<{
+    recentProposed: Bill[]
+    recentProcessed: Bill[]
+    recentUpdated: any[]
+  }>({
+    recentProposed: [],
+    recentProcessed: [],
+    recentUpdated: []
+  })
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy, setSortBy] = useState('bill_no')
   const [filters, setFilters] = useState<FilterState>({
@@ -121,6 +131,12 @@ export default function BillPageClient() {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [activeFiltersCount, setActiveFiltersCount] = useState(0)
+  
+  // 탭별 캐시된 데이터
+  const [cachedData, setCachedData] = useState<{
+    [key: string]: Bill[]
+  }>({})
+  const [dataLoaded, setDataLoaded] = useState(false)
   
   const { isFavorited, toggleFavorite } = useFavorites()
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -163,20 +179,30 @@ export default function BillPageClient() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // 초기 데이터 로딩
+    // 초기 데이터 로딩 (전체 데이터 한 번만)
   useEffect(() => {
-    if (supabase && mounted) {
-      fetchBills(true)
+    if (supabase && mounted && !dataLoaded) {
+      loadAllBills()
     }
-  }, [supabase, mounted])
+  }, [supabase, mounted, dataLoaded])
 
-  // 검색/필터/카테고리 변경시 데이터 재로딩
+  // 검색/필터/카테고리 변경시 클라이언트 사이드 필터링
   useEffect(() => {
-    if (supabase && mounted) {
-      setCurrentPage(1)
-      fetchBills(true)
+    if (dataLoaded) {
+      setCurrentPage(1) // 필터 변경시 첫 페이지로 리셋
+      filterAndDisplayBills()
     }
-  }, [debouncedSearchTerm, filters, activeCategory, sortBy, supabase, mounted])
+  }, [debouncedSearchTerm, filters, activeCategory, sortBy, dataLoaded, allBills])
+
+  // 페이지 변경시 표시되는 데이터 업데이트
+  useEffect(() => {
+    if (filteredBills.length > 0) {
+      const startIndex = 0
+      const endIndex = currentPage * itemsPerPage
+      setDisplayedBills(filteredBills.slice(startIndex, endIndex))
+      setHasMore(endIndex < filteredBills.length)
+    }
+  }, [currentPage, filteredBills])
 
   // 활성 필터 카운트 업데이트
   useEffect(() => {
@@ -186,7 +212,7 @@ export default function BillPageClient() {
 
   // 무한 스크롤 설정
   useEffect(() => {
-    if (loadMoreRef.current && hasMore && !loading && !loadingMore) {
+    if (loadMoreRef.current && hasMore && !loading && !loadingMore && activeCategory !== 'recent') {
       observerRef.current = new IntersectionObserver(
         (entries) => {
           if (entries[0].isIntersecting) {
@@ -203,13 +229,14 @@ export default function BillPageClient() {
         observerRef.current.disconnect()
       }
     }
-  }, [hasMore, loading, loadingMore])
+  }, [hasMore, loading, loadingMore, activeCategory])
 
   // 정렬 함수 분리
-  const sortBills = (bills: Bill[]) => {
+  const sortBills = (bills: Bill[], category?: string) => {
+    const categoryToUse = category || activeCategory
     return bills.sort((a, b) => {
       // 통과/부결 탭: proc_dt 1차, bill_no 2차 정렬
-      if (activeCategory === 'passed' || activeCategory === 'rejected') {
+      if (categoryToUse === 'passed' || categoryToUse === 'rejected') {
         const aProcDate = new Date(a.proc_dt || '').getTime()
         const bProcDate = new Date(b.proc_dt || '').getTime()
         
@@ -231,7 +258,7 @@ export default function BillPageClient() {
       }
       
       // 전체/계류중 탭: propose_dt 1차, bill_no 2차 정렬
-      if (activeCategory === 'all' || activeCategory === 'pending') {
+      if (categoryToUse === 'all' || categoryToUse === 'pending') {
         const aProposeDate = new Date(a.propose_dt || '').getTime()
         const bProposeDate = new Date(b.propose_dt || '').getTime()
         
@@ -315,138 +342,188 @@ export default function BillPageClient() {
     })
   }
 
-  const fetchBills = async (reset = false) => {
+  // 전체 데이터를 페이징으로 로드
+  const loadAllBills = async () => {
     if (!supabase) return
     
+    setLoading(true)
+    setError(null)
+    
     try {
-      if (reset) {
-        setLoading(true)
-        setDisplayedBills([])
-      } else {
-        setLoadingMore(true)
-      }
-      setError(null)
+      console.log('🚀 전체 데이터 페이징 로드 시작')
+      
+      const pageSize = 1000
+      let allBills: Bill[] = []
+      let page = 0
+      let hasMore = true
+      let totalCount = 0
 
-      let query = supabase.from('bills').select('*', { count: 'exact' })
+      // 첫 번째 요청으로 총 개수 확인
+      const { count } = await supabase
+        .from('bills')
+        .select('*', { count: 'exact', head: true })
+      
+      totalCount = count || 0
+      console.log(`📊 총 ${totalCount}개의 법안 데이터를 로드합니다`)
 
-      // 카테고리 필터링
-      if (activeCategory !== 'all') {
-        switch (activeCategory) {
-          case 'pending':
-            query = query.eq('pass_gubn', '계류의안')
-            break
-          case 'passed':
-            query = query.in('general_result', ['원안가결', '수정가결'])
-            break
-          case 'rejected':
-            query = query.in('general_result', ['대안반영폐기', '수정안반영폐기', '부결', '철회', '폐기'])
-            break
-          case 'recent':
-            const thirtyDaysAgo = new Date()
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-            query = query.gte('propose_dt', thirtyDaysAgo.toISOString())
-            break
-        }
-      }
+      // 페이징으로 전체 데이터 로드
+      while (hasMore) {
+        const from = page * pageSize
+        const to = from + pageSize - 1
 
-      // 검색어 필터링
-      if (debouncedSearchTerm) {
-        query = query.or(`bill_name.ilike.%${debouncedSearchTerm}%,bill_no.ilike.%${debouncedSearchTerm}%,summary.ilike.%${debouncedSearchTerm}%`)
-      }
+        console.log(`📄 페이지 ${page + 1} 로딩 중... (${from + 1} ~ ${Math.min(to + 1, totalCount)})`)
 
-      // 추가 필터링
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== 'all') {
-          if (key === 'date_range') {
-            const daysAgo = new Date()
-            daysAgo.setDate(daysAgo.getDate() - parseInt(value))
-            query = query.gte('propose_dt', daysAgo.toISOString())
-          } else {
-            query = query.eq(key, value)
-          }
-        }
-      })
-
-      // 각 탭별 데이터베이스 정렬 설정
-      if (activeCategory === 'passed' || activeCategory === 'rejected') {
-        // 통과/부결: proc_dt 내림차순으로 1차 정렬, 클라이언트에서 2차 정렬
-        query = query.order('proc_dt', { ascending: false, nullsFirst: false })
-      } else if (activeCategory === 'all' || activeCategory === 'pending') {
-        // 전체/계류중: propose_dt 내림차순 1차, bill_no 내림차순 2차
-        query = query
+        const { data, error: fetchError } = await supabase
+          .from('bills')
+          .select('*')
           .order('propose_dt', { ascending: false, nullsFirst: false })
           .order('bill_no', { ascending: false, nullsFirst: false })
-      } else if (activeCategory === 'recent') {
-        // 최근: 발의일자 내림차순
-        query = query.order('propose_dt', { ascending: false, nullsFirst: false })
-      } else if (sortBy === 'bill_no' || !sortBy || sortBy === '') {
-        // 기본: bill_no 정렬은 ZZ 법안 때문에 복잡하므로 전체 데이터를 가져와서 클라이언트에서 정렬
-        query = query.order('id', { ascending: false })
-      } else {
-        switch (sortBy) {
-          case 'latest':
-            query = query.order('propose_dt', { ascending: false })
-            break
-          case 'oldest':
-            query = query.order('propose_dt', { ascending: true })
-            break
-          case 'name':
-            query = query.order('bill_name', { ascending: true })
-          break
+          .range(from, to)
+
+        if (fetchError) {
+          throw new Error(`페이지 ${page + 1} 로딩 오류: ${fetchError.message}`)
         }
+
+        const bills = data || []
+        allBills = [...allBills, ...bills]
+        
+        // 다음 페이지가 있는지 확인
+        hasMore = bills.length === pageSize && allBills.length < totalCount
+        page++
+
+        // 진행률 표시
+        const progress = Math.round((allBills.length / totalCount) * 100)
+        console.log(`⏳ 로딩 진행률: ${progress}% (${allBills.length}/${totalCount})`)
       }
 
-      // 페이지네이션
-      const pageToLoad = reset ? 1 : currentPage
-      const from = (pageToLoad - 1) * itemsPerPage
-      const to = from + itemsPerPage - 1
-
-      query = query.range(from, to)
-
-      const { data, count, error: fetchError } = await query
-
-      if (fetchError) {
-        throw new Error(`데이터 쿼리 오류: ${fetchError.message}`)
-      }
-
-      let newBills = data || []
+      console.log('✅ 전체 데이터 로딩 완료:', { 
+        총개수: totalCount, 
+        실제로드: allBills.length,
+        첫번째법안: allBills[0]?.bill_name,
+        마지막법안: allBills[allBills.length-1]?.bill_name 
+      })
       
-      // 정렬 함수 적용
-      newBills = sortBills(newBills)
+      setAllBills(allBills)
+      setTotalCount(totalCount)
+      setDataLoaded(true)
       
-      if (reset) {
-        setDisplayedBills(newBills)
-        setCurrentPage(2)
-      } else {
-        // 무한 스크롤 시에도 전체 목록을 다시 정렬
-        setDisplayedBills(prev => {
-          const combined = [...prev, ...newBills]
-          // 중복 제거
-          const unique = combined.filter((bill, index, self) => 
-            index === self.findIndex(b => b.bill_id === bill.bill_id)
-          )
-          
-          // 정렬 함수 적용
-          return sortBills(unique)
-        })
-        setCurrentPage(prev => prev + 1)
-      }
-
-      setTotalCount(count || 0)
-      setHasMore(newBills.length === itemsPerPage)
+      // 최근 탭을 위한 데이터도 미리 생성
+      const oneWeekAgo = new Date()
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+      
+      const recentProposed = allBills.filter(bill => 
+        bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
+      ).sort((a, b) => parseInt(b.bill_no?.replace(/\D/g, '') || '0') - parseInt(a.bill_no?.replace(/\D/g, '') || '0'))
+      
+      const recentProcessed = allBills.filter(bill => 
+        bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
+      ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
+      
+      setRecentBills({
+        recentProposed,
+        recentProcessed,
+        recentUpdated: [] // API에서 가져오는 것과 다르므로 일단 빈 배열
+      })
       
     } catch (err) {
-      console.error('법안 데이터 가져오기 실패:', err)
-      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      console.error('❌ 전체 데이터 로딩 실패:', err)
+      setError(err instanceof Error ? err.message : '데이터를 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
-      setLoadingMore(false)
     }
   }
 
+  // 클라이언트 사이드 필터링 및 표시
+  const filterAndDisplayBills = () => {
+    if (!allBills.length) return
+    
+    let filtered = [...allBills]
+    
+    // 카테고리 필터링
+    if (activeCategory !== 'all') {
+      switch (activeCategory) {
+        case 'pending':
+          filtered = filtered.filter(bill => bill.pass_gubn === '계류의안')
+          break
+        case 'passed':
+          filtered = filtered.filter(bill => 
+            ['원안가결', '수정가결', '대안반영폐기', '수정안반영폐기'].includes(bill.general_result || '') &&
+            !['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+          )
+          break
+        case 'rejected':
+          filtered = filtered.filter(bill => 
+            ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
+            ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+          )
+          break
+        case 'recent':
+          const thirtyDaysAgo = new Date()
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+          filtered = filtered.filter(bill => 
+            bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
+          )
+          break
+      }
+    }
+    
+    // 검색어 필터링
+    if (debouncedSearchTerm) {
+      const searchLower = debouncedSearchTerm.toLowerCase()
+      const beforeSearch = filtered.length
+      filtered = filtered.filter(bill => 
+        (bill.bill_name?.toLowerCase().includes(searchLower)) ||
+        (bill.bill_no?.toLowerCase().includes(searchLower)) ||
+        (bill.summary?.toLowerCase().includes(searchLower))
+      )
+      console.log('🔍 검색 필터링:', { 
+        검색어: debouncedSearchTerm, 
+        이전: beforeSearch, 
+        이후: filtered.length,
+        첫번째결과: filtered[0]?.bill_name 
+      })
+    }
+    
+    // 추가 필터 적용
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== 'all') {
+        if (key === 'date_range') {
+          const daysAgo = new Date()
+          daysAgo.setDate(daysAgo.getDate() - parseInt(value))
+          filtered = filtered.filter(bill => 
+            bill.propose_dt && new Date(bill.propose_dt) >= daysAgo
+          )
+        } else {
+          filtered = filtered.filter(bill => (bill as any)[key] === value)
+        }
+      }
+    })
+    
+    // 정렬 적용
+    filtered = sortBills(filtered, activeCategory)
+    
+    setFilteredBills(filtered)
+    
+    // 페이지네이션 적용
+    const startIndex = 0
+    const endIndex = currentPage * itemsPerPage
+    setDisplayedBills(filtered.slice(startIndex, endIndex))
+    setHasMore(endIndex < filtered.length)
+  }
+
   const loadMoreBills = () => {
-    if (!loadingMore && hasMore) {
-      fetchBills(false)
+    if (!loadingMore && hasMore && filteredBills.length > 0) {
+      setLoadingMore(true)
+      const nextPage = currentPage + 1
+      const startIndex = 0
+      const endIndex = nextPage * itemsPerPage
+      
+      setTimeout(() => {
+        setDisplayedBills(filteredBills.slice(startIndex, endIndex))
+        setCurrentPage(nextPage)
+        setHasMore(endIndex < filteredBills.length)
+        setLoadingMore(false)
+      }, 100) // 부드러운 로딩 효과
     }
   }
 
@@ -538,17 +615,6 @@ export default function BillPageClient() {
                 />
               </div>
               <div className="flex gap-2">
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                                     <SelectContent>
-                     <SelectItem value="bill_no">법안번호순</SelectItem>
-                     <SelectItem value="latest">최신순</SelectItem>
-                     <SelectItem value="oldest">오래된순</SelectItem>
-                     <SelectItem value="name">이름순</SelectItem>
-                   </SelectContent>
-                </Select>
                 <Sheet>
                   <SheetTrigger asChild>
                     <Button variant="outline" className="relative">
@@ -730,6 +796,150 @@ export default function BillPageClient() {
 
       {/* 메인 컨텐츠 */}
       <div className="container mx-auto px-4 py-6">
+        {activeCategory === 'recent' ? (
+          <div className="space-y-6">
+            {/* 최근 탭 서브탭 */}
+            <div className="bg-white rounded-lg border">
+              <Tabs value={recentSubTab} onValueChange={setRecentSubTab}>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="proposed">최근 접수</TabsTrigger>
+                  <TabsTrigger value="updated">진행 상태 변경</TabsTrigger>
+                  <TabsTrigger value="processed">최근 처리 완료</TabsTrigger>
+                </TabsList>
+                
+                <div className="p-6">
+                  {loading ? (
+                    <div className="space-y-4">
+                      {[...Array(3)].map((_, i) => (
+                        <Card key={i}>
+                          <CardContent className="p-6">
+                            <div className="space-y-3">
+                              <Skeleton className="h-6 w-3/4" />
+                              <Skeleton className="h-4 w-1/2" />
+                              <Skeleton className="h-16 w-full" />
+                              <div className="flex gap-2">
+                                <Skeleton className="h-6 w-20" />
+                                <Skeleton className="h-6 w-24" />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <TabsContent value="proposed" className="mt-0">
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="text-2xl">📥</div>
+                            <div>
+                              <h3 className="text-lg font-semibold">최근 접수된 법안</h3>
+                              <p className="text-sm text-gray-600">최근 일주일간 새로 접수된 법안들입니다</p>
+                            </div>
+                          </div>
+                                                     <div className={`grid gap-6 ${
+                             viewMode === 'grid' 
+                               ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+                               : 'grid-cols-1'
+                           }`}>
+                             {recentBills.recentProposed.length === 0 ? (
+                               <div className="col-span-full text-center py-8 text-gray-500">
+                                 최근 접수된 법안이 없습니다
+                               </div>
+                             ) : (
+                               recentBills.recentProposed.map((bill: Bill) => (
+                                 <BillCard
+                                   key={bill.bill_id}
+                                   bill={bill}
+                                   searchTerm=""
+                                   isFavorited={isFavorited(bill.bill_id)}
+                                   onFavoriteToggle={handleFavoriteToggle}
+                                 />
+                               ))
+                             )}
+                           </div>
+                        </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="updated" className="mt-0">
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="text-2xl">🔄</div>
+                            <div>
+                              <h3 className="text-lg font-semibold">최근 진행 상태 변경</h3>
+                              <p className="text-sm text-gray-600">최근 일주일간 처리 단계가 변경된 법안들입니다</p>
+                            </div>
+                          </div>
+                                                     <div className={`grid gap-6 ${
+                             viewMode === 'grid' 
+                               ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+                               : 'grid-cols-1'
+                           }`}>
+                             {recentBills.recentUpdated.length === 0 ? (
+                               <div className="col-span-full text-center py-8 text-gray-500">
+                                 최근 진행 상태가 변경된 법안이 없습니다
+                               </div>
+                             ) : (
+                               recentBills.recentUpdated.map((history: any) => {
+                                 const changeDate = new Date(history.tracked_at).toLocaleDateString('ko-KR')
+                                 const statusChangeInfo = `🔄 ${history.old_value} → ${history.new_value} (${changeDate})`
+                                 
+                                 return (
+                                   <BillCard
+                                     key={`${history.bill_id}-${history.tracked_at}`}
+                                     bill={history.bills}
+                                     searchTerm=""
+                                     isFavorited={isFavorited(history.bill_id)}
+                                     onFavoriteToggle={handleFavoriteToggle}
+                                     extraDateInfo={statusChangeInfo}
+                                   />
+                                 )
+                               })
+                             )}
+                           </div>
+                        </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="processed" className="mt-0">
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="text-2xl">✅</div>
+                            <div>
+                              <h3 className="text-lg font-semibold">최근 처리 완료</h3>
+                              <p className="text-sm text-gray-600">최근 일주일간 처리가 완료된 법안들입니다</p>
+                            </div>
+                          </div>
+                                                     <div className={`grid gap-6 ${
+                             viewMode === 'grid' 
+                               ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+                               : 'grid-cols-1'
+                           }`}>
+                             {recentBills.recentProcessed.length === 0 ? (
+                               <div className="col-span-full text-center py-8 text-gray-500">
+                                 최근 처리 완료된 법안이 없습니다
+                               </div>
+                             ) : (
+                               recentBills.recentProcessed.map((bill: Bill) => (
+                                 <BillCard
+                                   key={bill.bill_id}
+                                   bill={bill}
+                                   searchTerm=""
+                                   isFavorited={isFavorited(bill.bill_id)}
+                                   onFavoriteToggle={handleFavoriteToggle}
+                                 />
+                               ))
+                             )}
+                           </div>
+                        </div>
+                      </TabsContent>
+                    </>
+                  )}
+                </div>
+              </Tabs>
+            </div>
+          </div>
+        ) : (
+          <>
         {loading ? (
           <div className="space-y-4">
             {[...Array(6)].map((_, i) => (
@@ -795,6 +1005,8 @@ export default function BillPageClient() {
               <div className="text-center py-8">
                 <p className="text-gray-600">모든 법안을 불러왔습니다</p>
         </div>
+          )}
+              </>
       )}
           </>
         )}
