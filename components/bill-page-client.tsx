@@ -1,11 +1,21 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
+import { Search, Filter, LayoutGrid, List, ChevronDown, Loader2, AlertCircle } from 'lucide-react'
 import { BillCard } from '@/components/bill-card'
 import { useFavorites } from '@/hooks/use-favorites'
-import { formatDateUTC } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface Bill {
   id: number
@@ -28,76 +38,95 @@ interface FilterState {
   general_result: string
   proc_stage_cd: string
   pass_gubn: string
+  proposer_kind: string
+  date_range: string
 }
 
+// 카테고리 정의
+const CATEGORIES = [
+  { id: 'all', name: '전체', description: '모든 법안', icon: '📋' },
+  { id: 'pending', name: '계류중', description: '심사중인 법안', icon: '⏳' },
+  { id: 'passed', name: '통과', description: '가결된 법안', icon: '✅' },
+  { id: 'rejected', name: '부결', description: '부결된 법안', icon: '❌' },
+  { id: 'recent', name: '최근', description: '최근 30일 법안', icon: '🆕' },
+]
+
 // 필터 옵션들
-// 처리결과 (의미별 순서)
-const GENERAL_RESULT_OPTIONS = [
-  // === 긍정적 결과 (법안 통과) ===
-  '원안가결',    // 원래안 그대로 가결
-  '수정가결',    // 수정해서 가결
-  // === 부정적 결과 (법안 불통과) ===
-  '부결',       // 표결에서 부결
-  '폐기',       // 일반적인 폐기
-  // === 다른 법안과 병합/통합 ===
-  '대안반영폐기',  // 다른 대안에 반영되어 폐기
-  '수정안반영폐기', // 수정안에 반영되어 폐기
-  // === 자진 포기 ===
-  '철회'        // 발의자가 스스로 철회
-]
-
-// 실제 법안 진행 순서에 따른 처리단계
-const PROC_STAGE_OPTIONS = [
-  // === 정상 진행 단계 (순서대로) ===
-  '접수',
-  '소관위접수', 
-  '소관위심사',
-  '소관위심사보고',
-  '체계자구심사',
-  '본회의부의안건',
-  '본회의의결',
-  '정부이송',
-  '공포',
-  // === 재의 관련 ===
-  '재의요구',
-  '재의(가결)',
-  '재의(부결)',
-  // === 처리 중단/변화 ===
-  '철회',
-  '대안반영폐기',
-  '수정안반영폐기'
-]
-
-const PASS_GUBN_OPTIONS = ['계류의안', '처리의안']
+const FILTER_OPTIONS = {
+  general_result: [
+    { value: 'all', label: '전체' },
+    { value: '원안가결', label: '원안가결' },
+    { value: '수정가결', label: '수정가결' },
+    { value: '부결', label: '부결' },
+    { value: '폐기', label: '폐기' },
+    { value: '대안반영폐기', label: '대안반영폐기' },
+    { value: '수정안반영폐기', label: '수정안반영폐기' },
+    { value: '철회', label: '철회' },
+  ],
+  proc_stage_cd: [
+    { value: 'all', label: '전체' },
+    { value: '접수', label: '접수' },
+    { value: '소관위접수', label: '소관위접수' },
+    { value: '소관위심사', label: '소관위심사' },
+    { value: '소관위심사보고', label: '소관위심사보고' },
+    { value: '체계자구심사', label: '체계자구심사' },
+    { value: '본회의부의안건', label: '본회의부의안건' },
+    { value: '본회의의결', label: '본회의의결' },
+    { value: '정부이송', label: '정부이송' },
+    { value: '공포', label: '공포' },
+  ],
+  pass_gubn: [
+    { value: 'all', label: '전체' },
+    { value: '계류의안', label: '계류의안' },
+    { value: '처리의안', label: '처리의안' },
+  ],
+  proposer_kind: [
+    { value: 'all', label: '전체' },
+    { value: '의원', label: '의원' },
+    { value: '정부', label: '정부' },
+    { value: '위원회', label: '위원회' },
+  ],
+  date_range: [
+    { value: 'all', label: '전체' },
+    { value: '7', label: '최근 7일' },
+    { value: '30', label: '최근 30일' },
+    { value: '90', label: '최근 90일' },
+    { value: '365', label: '최근 1년' },
+  ]
+}
 
 export default function BillPageClient() {
   const router = useRouter()
   const [bills, setBills] = useState<Bill[]>([])
-  const [allData, setAllData] = useState<Bill[]>([]) // 전체 데이터 캐시
+  const [filteredBills, setFilteredBills] = useState<Bill[]>([])
+  const [displayedBills, setDisplayedBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
-  const [searchHistory, setSearchHistory] = useState<string[]>([])
-  const [showSearchHistory, setShowSearchHistory] = useState(false)
-  const [advancedSearch, setAdvancedSearch] = useState(false)
-  const [searchFields, setSearchFields] = useState({
-    bill_name: true,
-    bill_no: true,
-    summary: true,
-    proposer_kind: false
-  })
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [sortBy, setSortBy] = useState('bill_no')
   const [filters, setFilters] = useState<FilterState>({
-    general_result: '',
-    proc_stage_cd: '',
-    pass_gubn: ''
+    general_result: 'all',
+    proc_stage_cd: 'all',
+    pass_gubn: 'all',
+    proposer_kind: 'all',
+    date_range: 'all'
   })
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
-  const itemsPerPage = 20
+  const [totalCount, setTotalCount] = useState(0)
+  const [activeFiltersCount, setActiveFiltersCount] = useState(0)
+  
   const { isFavorited, toggleFavorite } = useFavorites()
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  
+  const itemsPerPage = 12
 
   // 컴포넌트 마운트 확인
   useEffect(() => {
@@ -106,10 +135,7 @@ export default function BillPageClient() {
 
   // Supabase 클라이언트 초기화
   useEffect(() => {
-    // 클라이언트 사이드에서만 실행되도록 보장
-    if (!mounted || typeof window === 'undefined') {
-      return
-    }
+    if (!mounted || typeof window === 'undefined') return
     
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -129,561 +155,650 @@ export default function BillPageClient() {
     }
   }, [mounted])
 
-  // Load search history from localStorage
+  // 검색어 디바운싱
   useEffect(() => {
-    if (!mounted) return
-    
-    const saved = localStorage.getItem('billSearchHistory')
-    if (saved) {
-      setSearchHistory(JSON.parse(saved))
-    }
-  }, [mounted])
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
 
-  const fetchAllBills = useCallback(async () => {
-    if (!supabase) {
-      console.log('Supabase client not ready yet')
-      return
-    }
-    
-    try {
-      setLoading(true)
-      setError(null)
-      
-      // 기본 연결 테스트
-      const testQuery = supabase.from('bills').select('count', { count: 'exact', head: true })
-      const testResult = await testQuery
-      
-      if (testResult.error) {
-        console.error('Basic connection test failed:', testResult.error)
-        throw new Error(`데이터베이스 연결 실패: ${testResult.error.message}`)
-      }
-      
-      console.log('=== 쿼리 디버깅 ===')
-      console.log('검색어:', debouncedSearchTerm)
-      console.log('필터:', filters)
-      console.log('현재 페이지:', currentPage)
-      console.log('검색 필드:', searchFields)
-      
-      // 모든 데이터 가져오기 (1000개씩 여러 번 요청)
-      let allData: Bill[] = []
-      let from = 0
-      const batchSize = 1000
-      
-      while (true) {
-        console.log(`배치 ${Math.floor(from / batchSize) + 1}: ${from}~${from + batchSize - 1} 가져오는 중...`)
-        
-        const batchResult = await supabase
-          .from('bills')
-          .select('*')
-          .range(from, from + batchSize - 1)
-        
-        if (batchResult.error) {
-          console.error('Batch query error:', batchResult.error)
-          throw new Error(`데이터 쿼리 오류: ${JSON.stringify(batchResult.error)}`)
-        }
-        
-        const batchData = batchResult.data || []
-        allData = [...allData, ...batchData]
-        
-        console.log(`배치 완료: ${batchData.length}개 가져옴, 총 ${allData.length}개`)
-        
-        // 더 이상 데이터가 없으면 종료
-        if (batchData.length < batchSize) {
-          break
-        }
-        
-        from += batchSize
-      }
-
-      console.log(`전체 데이터 로딩 완료: ${allData.length}개`)
-      console.log('첫 5개 법안번호:', allData.slice(0, 5).map((d: Bill) => d.bill_no))
-
-      // 전체 데이터를 state에 저장
-      setAllData(allData)
-    } catch (err) {
-      console.error('Error fetching bills:', err)
-      
-      if (err instanceof Error) {
-        setError(`데이터를 가져오는 중 오류가 발생했습니다: ${err.message}`)
-      } else {
-        console.error('Unknown error type:', typeof err, err)
-        setError(`데이터를 가져오는 중 알 수 없는 오류가 발생했습니다: ${JSON.stringify(err)}`)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase, debouncedSearchTerm, filters, currentPage, searchFields])
-
-  // 데이터 로드
+  // 초기 데이터 로딩
   useEffect(() => {
     if (supabase && mounted) {
-      fetchAllBills()
+      fetchBills(true)
     }
-  }, [fetchAllBills, supabase, mounted])
+  }, [supabase, mounted])
 
-  // 더 이상 자동 debounce를 사용하지 않음 - 엔터나 검색 버튼으로만 검색
-
-  // Process and filter data
+  // 검색/필터/카테고리 변경시 데이터 재로딩
   useEffect(() => {
-    if (allData.length === 0) {
-      setBills([])
-      setTotalCount(0)
-      return
-    }
-
-    let filteredData = [...allData]
-
-    // 검색 필터
-    if (debouncedSearchTerm.trim()) {
-      const searchLower = debouncedSearchTerm.toLowerCase()
-      filteredData = filteredData.filter(bill => {
-        const searchableFields = []
-        if (searchFields.bill_name && bill.bill_name) searchableFields.push(bill.bill_name.toLowerCase())
-        if (searchFields.bill_no && bill.bill_no) searchableFields.push(bill.bill_no.toLowerCase())
-        if (searchFields.summary && bill.summary) searchableFields.push(bill.summary.toLowerCase())
-        if (searchFields.proposer_kind && bill.proposer_kind) searchableFields.push(bill.proposer_kind.toLowerCase())
-        
-        return searchableFields.some(field => field.includes(searchLower))
-      })
-    }
-
-    // 추가 필터 적용
-    if (filters.general_result) {
-      filteredData = filteredData.filter(bill => bill.general_result === filters.general_result)
-    }
-    if (filters.proc_stage_cd) {
-      filteredData = filteredData.filter(bill => bill.proc_stage_cd === filters.proc_stage_cd)
-    }
-    if (filters.pass_gubn) {
-      filteredData = filteredData.filter(bill => bill.pass_gubn === filters.pass_gubn)
-    }
-
-    // 법안 번호 내림차순 정렬
-    filteredData.sort((a, b) => {
-      const aNum = parseInt(a.bill_no?.replace(/\D/g, '') || '0')
-      const bNum = parseInt(b.bill_no?.replace(/\D/g, '') || '0')
-      return bNum - aNum
-    })
-
-    setTotalCount(filteredData.length)
-
-    // 페이지네이션
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-    const paginatedData = filteredData.slice(startIndex, endIndex)
-
-    setBills(paginatedData)
-  }, [allData, debouncedSearchTerm, filters, currentPage, itemsPerPage, searchFields])
-
-  const totalPages = Math.ceil(totalCount / itemsPerPage)
-
-  const handleFilterChange = (field: keyof FilterState, value: string) => {
-    setFilters(prev => ({ ...prev, [field]: value }))
-    setCurrentPage(1) // 필터 변경 시 첫 페이지로
-  }
-
-  const clearAllFilters = () => {
-    setFilters({
-      general_result: '',
-      proc_stage_cd: '',
-      pass_gubn: ''
-    })
-    setSearchTerm('')
-    setDebouncedSearchTerm('')
-    setCurrentPage(1)
-  }
-
-  const addToSearchHistory = (term: string) => {
-    const newHistory = [term, ...searchHistory.filter(h => h !== term)].slice(0, 10)
-    setSearchHistory(newHistory)
-    localStorage.setItem('billSearchHistory', JSON.stringify(newHistory))
-  }
-
-  const handleSearchSubmit = (term: string = searchTerm) => {
-    if (term.trim()) {
-      addToSearchHistory(term)
-      setDebouncedSearchTerm(term)
-      setSearchTerm(term)
+    if (supabase && mounted) {
       setCurrentPage(1)
+      fetchBills(true)
     }
-    setShowSearchHistory(false)
+  }, [debouncedSearchTerm, filters, activeCategory, sortBy, supabase, mounted])
+
+  // 활성 필터 카운트 업데이트
+  useEffect(() => {
+    const count = Object.values(filters).filter(value => value !== '' && value !== 'all').length
+    setActiveFiltersCount(count)
+  }, [filters])
+
+  // 무한 스크롤 설정
+  useEffect(() => {
+    if (loadMoreRef.current && hasMore && !loading && !loadingMore) {
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            loadMoreBills()
+          }
+        },
+        { threshold: 0.1 }
+      )
+      observerRef.current.observe(loadMoreRef.current)
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [hasMore, loading, loadingMore])
+
+  // 정렬 함수 분리
+  const sortBills = (bills: Bill[]) => {
+    return bills.sort((a, b) => {
+      // 통과/부결 탭: proc_dt 1차, bill_no 2차 정렬
+      if (activeCategory === 'passed' || activeCategory === 'rejected') {
+        const aProcDate = new Date(a.proc_dt || '').getTime()
+        const bProcDate = new Date(b.proc_dt || '').getTime()
+        
+        // proc_dt가 없으면 뒤로 보내기
+        if (!a.proc_dt && b.proc_dt) return 1
+        if (a.proc_dt && !b.proc_dt) return -1
+        
+        // proc_dt 내림차순 비교
+        if (aProcDate !== bProcDate) {
+          return bProcDate - aProcDate // 내림차순: 최신 처리일이 먼저
+        }
+        
+        // proc_dt가 같으면 bill_no 내림차순
+        const aBillNo = a.bill_no || ''
+        const bBillNo = b.bill_no || ''
+        const aNum = parseInt(aBillNo.replace(/\D/g, '') || '0')
+        const bNum = parseInt(bBillNo.replace(/\D/g, '') || '0')
+        return bNum - aNum
+      }
+      
+      // 전체/계류중 탭: propose_dt 1차, bill_no 2차 정렬
+      if (activeCategory === 'all' || activeCategory === 'pending') {
+        const aProposeDate = new Date(a.propose_dt || '').getTime()
+        const bProposeDate = new Date(b.propose_dt || '').getTime()
+        
+        // propose_dt가 없으면 뒤로 보내기
+        if (!a.propose_dt && b.propose_dt) return 1
+        if (a.propose_dt && !b.propose_dt) return -1
+        
+        // propose_dt 내림차순 비교
+        if (aProposeDate !== bProposeDate) {
+          return bProposeDate - aProposeDate // 내림차순: 최신 발의일이 먼저
+        }
+        
+        // propose_dt가 같으면 bill_no 내림차순
+        const aBillNo = a.bill_no || ''
+        const bBillNo = b.bill_no || ''
+        const aNum = parseInt(aBillNo.replace(/\D/g, '') || '0')
+        const bNum = parseInt(bBillNo.replace(/\D/g, '') || '0')
+        return bNum - aNum
+      }
+      
+      // 다른 탭들은 기존 로직 유지
+      const aBillNo = a.bill_no || ''
+      const bBillNo = b.bill_no || ''
+      
+      // ZZ로 시작하는 법안 처리 (대소문자 구분 없이)
+      const aIsZZ = aBillNo.toUpperCase().startsWith('ZZ')
+      const bIsZZ = bBillNo.toUpperCase().startsWith('ZZ')
+      
+      // 하나는 ZZ, 하나는 일반 법안인 경우 - 강제로 ZZ를 뒤로
+      if (aIsZZ && !bIsZZ) return 1000  // ZZ법안을 확실히 뒤로
+      if (!aIsZZ && bIsZZ) return -1000 // 일반법안을 확실히 앞으로
+      
+      // 둘 다 일반 법안인 경우
+      if (!aIsZZ && !bIsZZ) {
+        if (sortBy === 'bill_no' || (!sortBy || sortBy === '')) {
+          // 법안번호 정렬: 숫자 기준 내림차순
+          const aNum = parseInt(aBillNo.replace(/\D/g, '') || '0')
+          const bNum = parseInt(bBillNo.replace(/\D/g, '') || '0')
+          return bNum - aNum // 내림차순: 큰 번호가 먼저
+        } else if (sortBy === 'latest') {
+          // 최신순 정렬: 발의일 기준
+          const aDate = new Date(a.propose_dt || '').getTime()
+          const bDate = new Date(b.propose_dt || '').getTime()
+          return bDate - aDate
+        } else if (sortBy === 'oldest') {
+          // 오래된순 정렬: 발의일 기준
+          const aDate = new Date(a.propose_dt || '').getTime()
+          const bDate = new Date(b.propose_dt || '').getTime()
+          return aDate - bDate
+        } else if (sortBy === 'name') {
+          // 이름순 정렬
+          const aName = a.bill_name || ''
+          const bName = b.bill_name || ''
+          return aName.localeCompare(bName)
+        }
+      }
+      
+      // 둘 다 ZZ 법안인 경우
+      if (aIsZZ && bIsZZ) {
+        if (sortBy === 'bill_no' || (!sortBy || sortBy === '')) {
+          // 법안번호 정렬: 숫자 기준 내림차순
+          const aNum = parseInt(aBillNo.replace(/\D/g, '') || '0')
+          const bNum = parseInt(bBillNo.replace(/\D/g, '') || '0')
+          return bNum - aNum
+        } else if (sortBy === 'latest') {
+          const aDate = new Date(a.propose_dt || '').getTime()
+          const bDate = new Date(b.propose_dt || '').getTime()
+          return bDate - aDate
+        } else if (sortBy === 'oldest') {
+          const aDate = new Date(a.propose_dt || '').getTime()
+          const bDate = new Date(b.propose_dt || '').getTime()
+          return aDate - bDate
+        } else if (sortBy === 'name') {
+          const aName = a.bill_name || ''
+          const bName = b.bill_name || ''
+          return aName.localeCompare(bName)
+        }
+      }
+      
+      return 0
+    })
   }
 
+  const fetchBills = async (reset = false) => {
+    if (!supabase) return
+    
+    try {
+      if (reset) {
+        setLoading(true)
+        setDisplayedBills([])
+      } else {
+        setLoadingMore(true)
+      }
+      setError(null)
 
+      let query = supabase.from('bills').select('*', { count: 'exact' })
 
-  // 컴포넌트가 마운트되지 않았을 때
+      // 카테고리 필터링
+      if (activeCategory !== 'all') {
+        switch (activeCategory) {
+          case 'pending':
+            query = query.eq('pass_gubn', '계류의안')
+            break
+          case 'passed':
+            query = query.in('general_result', ['원안가결', '수정가결'])
+            break
+          case 'rejected':
+            query = query.in('general_result', ['대안반영폐기', '수정안반영폐기', '부결', '철회', '폐기'])
+            break
+          case 'recent':
+            const thirtyDaysAgo = new Date()
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+            query = query.gte('propose_dt', thirtyDaysAgo.toISOString())
+            break
+        }
+      }
+
+      // 검색어 필터링
+      if (debouncedSearchTerm) {
+        query = query.or(`bill_name.ilike.%${debouncedSearchTerm}%,bill_no.ilike.%${debouncedSearchTerm}%,summary.ilike.%${debouncedSearchTerm}%`)
+      }
+
+      // 추가 필터링
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== 'all') {
+          if (key === 'date_range') {
+            const daysAgo = new Date()
+            daysAgo.setDate(daysAgo.getDate() - parseInt(value))
+            query = query.gte('propose_dt', daysAgo.toISOString())
+          } else {
+            query = query.eq(key, value)
+          }
+        }
+      })
+
+      // 각 탭별 데이터베이스 정렬 설정
+      if (activeCategory === 'passed' || activeCategory === 'rejected') {
+        // 통과/부결: proc_dt 내림차순으로 1차 정렬, 클라이언트에서 2차 정렬
+        query = query.order('proc_dt', { ascending: false, nullsFirst: false })
+      } else if (activeCategory === 'all' || activeCategory === 'pending') {
+        // 전체/계류중: propose_dt 내림차순 1차, bill_no 내림차순 2차
+        query = query
+          .order('propose_dt', { ascending: false, nullsFirst: false })
+          .order('bill_no', { ascending: false, nullsFirst: false })
+      } else if (activeCategory === 'recent') {
+        // 최근: 발의일자 내림차순
+        query = query.order('propose_dt', { ascending: false, nullsFirst: false })
+      } else if (sortBy === 'bill_no' || !sortBy || sortBy === '') {
+        // 기본: bill_no 정렬은 ZZ 법안 때문에 복잡하므로 전체 데이터를 가져와서 클라이언트에서 정렬
+        query = query.order('id', { ascending: false })
+      } else {
+        switch (sortBy) {
+          case 'latest':
+            query = query.order('propose_dt', { ascending: false })
+            break
+          case 'oldest':
+            query = query.order('propose_dt', { ascending: true })
+            break
+          case 'name':
+            query = query.order('bill_name', { ascending: true })
+          break
+        }
+      }
+
+      // 페이지네이션
+      const pageToLoad = reset ? 1 : currentPage
+      const from = (pageToLoad - 1) * itemsPerPage
+      const to = from + itemsPerPage - 1
+
+      query = query.range(from, to)
+
+      const { data, count, error: fetchError } = await query
+
+      if (fetchError) {
+        throw new Error(`데이터 쿼리 오류: ${fetchError.message}`)
+      }
+
+      let newBills = data || []
+      
+      // 정렬 함수 적용
+      newBills = sortBills(newBills)
+      
+      if (reset) {
+        setDisplayedBills(newBills)
+        setCurrentPage(2)
+      } else {
+        // 무한 스크롤 시에도 전체 목록을 다시 정렬
+        setDisplayedBills(prev => {
+          const combined = [...prev, ...newBills]
+          // 중복 제거
+          const unique = combined.filter((bill, index, self) => 
+            index === self.findIndex(b => b.bill_id === bill.bill_id)
+          )
+          
+          // 정렬 함수 적용
+          return sortBills(unique)
+        })
+        setCurrentPage(prev => prev + 1)
+      }
+
+      setTotalCount(count || 0)
+      setHasMore(newBills.length === itemsPerPage)
+      
+    } catch (err) {
+      console.error('법안 데이터 가져오기 실패:', err)
+      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  const loadMoreBills = () => {
+    if (!loadingMore && hasMore) {
+      fetchBills(false)
+    }
+  }
+
+  const handleFilterChange = (key: keyof FilterState, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  const clearFilters = () => {
+    setFilters({
+      general_result: 'all',
+      proc_stage_cd: 'all',
+      pass_gubn: 'all',
+      proposer_kind: 'all',
+      date_range: 'all'
+    })
+  }
+
+  const handleFavoriteToggle = (billId: string, isFav: boolean) => {
+    toggleFavorite(billId, isFav)
+  }
+
   if (!mounted) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (loading && bills.length === 0) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    )
+    return <div>로딩 중...</div>
   }
 
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">오류 발생</h2>
-          <p className="text-red-600">{error}</p>
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <CardTitle className="text-red-500">오류 발생</CardTitle>
         </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()} className="w-full">
+              새로고침
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">법안 데이터베이스</h1>
-        <p className="text-gray-600 mb-6">
-          총 <span className="font-semibold text-blue-600">{totalCount.toLocaleString()}</span>개의 법안이 등록되어 있습니다.
-          <span className="text-sm text-gray-500 ml-2">(법안번호 내림차순)</span>
-        </p>
-        
-        {/* 활성 필터 표시 */}
-        {(debouncedSearchTerm || filters.general_result || filters.proc_stage_cd || filters.pass_gubn) && (
-          <div className="mb-4">
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-sm font-medium text-gray-700">활성 필터:</span>
-              {debouncedSearchTerm && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  검색: &quot;{debouncedSearchTerm}&quot;
-                  <button
-                    onClick={() => {
-                      setSearchTerm('')
-                      setDebouncedSearchTerm('')
-                    }}
-                    className="ml-2 text-blue-600 hover:text-blue-800"
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {filters.pass_gubn && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  처리구분: {filters.pass_gubn}
-                  <button
-                    onClick={() => handleFilterChange('pass_gubn', '')}
-                    className="ml-2 text-green-600 hover:text-green-800"
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {filters.proc_stage_cd && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                  처리단계: {filters.proc_stage_cd}
-                  <button
-                    onClick={() => handleFilterChange('proc_stage_cd', '')}
-                    className="ml-2 text-yellow-600 hover:text-yellow-800"
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {filters.general_result && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  처리결과: {filters.general_result}
-                  <button
-                    onClick={() => handleFilterChange('general_result', '')}
-                    className="ml-2 text-purple-600 hover:text-purple-800"
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {/* 검색 및 필터 UI 계속... */}
-        <div className="mb-6 space-y-4">
-          {/* 향상된 검색 섹션 */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
-            {/* 메인 검색 바 */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="법안명, 법안번호, 요약내용으로 검색..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleSearchSubmit(searchTerm)
-                  }
-                }}
-                onFocus={() => setShowSearchHistory(true)}
-                onBlur={() => setTimeout(() => setShowSearchHistory(false), 200)}
-                className="w-full px-4 py-3 pl-10 pr-32 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <svg
-                className="absolute left-3 top-3 h-5 w-5 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              
-              {/* 검색 버튼 */}
-              <button
-                onClick={() => handleSearchSubmit(searchTerm)}
-                className="absolute right-20 top-2 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-              >
-                검색
-              </button>
-              
-              {/* 고급 검색 토글 */}
-              <button
-                onClick={() => setAdvancedSearch(!advancedSearch)}
-                className={`absolute right-3 top-2 px-3 py-1 text-sm rounded ${
-                  advancedSearch 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                고급
-              </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col gap-4">
+            {/* 타이틀과 통계 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">제 22대 국회 법안</h1>
+                <p className="text-gray-600 mt-1">
+                  총 <span className="font-semibold text-blue-600">{totalCount.toLocaleString()}</span>개의 법안
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
-            {/* 검색 히스토리 */}
-            {showSearchHistory && searchHistory.length > 0 && (
-              <div className="relative">
-                <div className="absolute top-0 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                  <div className="p-2 border-b bg-gray-50">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-700">최근 검색</span>
-                      <button
-                        onClick={() => {
-                          setSearchHistory([])
-                          localStorage.removeItem('billSearchHistory')
-                          setShowSearchHistory(false)
-                        }}
-                        className="text-xs text-gray-500 hover:text-gray-700"
-                      >
-                        전체 삭제
-                      </button>
+            {/* 검색바와 필터 */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                type="text"
+                  placeholder="법안명, 법안번호, 내용으로 검색..."
+                value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                                     <SelectContent>
+                     <SelectItem value="bill_no">법안번호순</SelectItem>
+                     <SelectItem value="latest">최신순</SelectItem>
+                     <SelectItem value="oldest">오래된순</SelectItem>
+                     <SelectItem value="name">이름순</SelectItem>
+                   </SelectContent>
+                </Select>
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" className="relative">
+                      <Filter className="h-4 w-4 mr-2" />
+                      필터
+                      {activeFiltersCount > 0 && (
+                        <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                          {activeFiltersCount}
+                        </Badge>
+                      )}
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent className="w-[400px] sm:w-[540px]">
+                    <SheetHeader className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Filter className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <SheetTitle className="text-xl">고급 필터</SheetTitle>
+                          <SheetDescription className="text-sm text-gray-500">
+                            원하는 조건으로 법안을 정확하게 필터링하세요
+                          </SheetDescription>
+                        </div>
+                      </div>
+                      {activeFiltersCount > 0 && (
+                        <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+                          <span className="font-medium">{activeFiltersCount}개의 필터가 적용됨</span>
+                          <Button onClick={clearFilters} variant="ghost" size="sm" className="h-6 px-2 text-blue-600 hover:text-blue-700">
+                            초기화
+                          </Button>
+                        </div>
+                      )}
+                    </SheetHeader>
+
+                    <div className="mt-8 space-y-8">
+                      {/* 처리 상태 그룹 */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+                          <h3 className="font-semibold text-gray-900">처리 상태</h3>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-4 pl-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                              처리결과
+                            </label>
+                            <Select value={filters.general_result} onValueChange={(value: string) => handleFilterChange('general_result', value)}>
+                              <SelectTrigger className="h-11 border-gray-200 focus:border-green-500 focus:ring-green-500/20">
+                                <SelectValue placeholder="처리결과를 선택하세요" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FILTER_OPTIONS.general_result.map(option => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+            </div>
+
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                              처리단계
+                            </label>
+                            <Select value={filters.proc_stage_cd} onValueChange={(value: string) => handleFilterChange('proc_stage_cd', value)}>
+                              <SelectTrigger className="h-11 border-gray-200 focus:border-green-500 focus:ring-green-500/20">
+                                <SelectValue placeholder="처리단계를 선택하세요" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FILTER_OPTIONS.proc_stage_cd.map(option => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                              처리구분
+                            </label>
+                            <Select value={filters.pass_gubn} onValueChange={(value: string) => handleFilterChange('pass_gubn', value)}>
+                              <SelectTrigger className="h-11 border-gray-200 focus:border-green-500 focus:ring-green-500/20">
+                                <SelectValue placeholder="처리구분을 선택하세요" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FILTER_OPTIONS.pass_gubn.map(option => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                     </div>
                   </div>
-                  {searchHistory.map((term, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSearchSubmit(term)}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm flex items-center"
-                    >
-                      <svg className="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {term}
-                    </button>
-                  ))}
                 </div>
-              </div>
-            )}
 
-            {/* 고급 검색 옵션 */}
-            {advancedSearch && (
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">검색 대상 필드</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={searchFields.bill_name}
-                      onChange={(e) => setSearchFields(prev => ({...prev, bill_name: e.target.checked}))}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">법안명</span>
+                      {/* 발의 정보 그룹 */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+                          <h3 className="font-semibold text-gray-900">발의 정보</h3>
+              </div>
+                        
+                        <div className="grid grid-cols-1 gap-4 pl-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                              발의자
                   </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={searchFields.bill_no}
-                      onChange={(e) => setSearchFields(prev => ({...prev, bill_no: e.target.checked}))}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">법안번호</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={searchFields.summary}
-                      onChange={(e) => setSearchFields(prev => ({...prev, summary: e.target.checked}))}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">요약</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={searchFields.proposer_kind}
-                      onChange={(e) => setSearchFields(prev => ({...prev, proposer_kind: e.target.checked}))}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">제안자</span>
-                  </label>
+                            <Select value={filters.proposer_kind} onValueChange={(value: string) => handleFilterChange('proposer_kind', value)}>
+                              <SelectTrigger className="h-11 border-gray-200 focus:border-purple-500 focus:ring-purple-500/20">
+                                <SelectValue placeholder="발의자를 선택하세요" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FILTER_OPTIONS.proposer_kind.map(option => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                 </div>
                 
-                {/* 검색 팁 */}
-                <div className="mt-3 text-xs text-gray-600 bg-blue-50 p-3 rounded">
-                  <strong>검색 팁:</strong> 여러 필드를 선택하면 OR 조건으로 검색됩니다. 
-                  정확한 문구를 찾으려면 &quot;따옴표&quot;를 사용하세요.
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                              <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                              발의일
+                            </label>
+                            <Select value={filters.date_range} onValueChange={(value: string) => handleFilterChange('date_range', value)}>
+                              <SelectTrigger className="h-11 border-gray-200 focus:border-purple-500 focus:ring-purple-500/20">
+                                <SelectValue placeholder="발의일 범위를 선택하세요" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FILTER_OPTIONS.date_range.map(option => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
                 </div>
+                  </SheetContent>
+                </Sheet>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 필터 섹션 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* 처리구분 필터 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">처리구분</label>
-          <select
-            value={filters.pass_gubn}
-            onChange={(e) => handleFilterChange('pass_gubn', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">전체</option>
-            {PASS_GUBN_OPTIONS.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* 처리단계 필터 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">처리단계</label>
-          <select
-            value={filters.proc_stage_cd}
-            onChange={(e) => handleFilterChange('proc_stage_cd', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">전체</option>
-            {PROC_STAGE_OPTIONS.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* 처리결과 필터 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">처리결과</label>
-          <select
-            value={filters.general_result}
-            onChange={(e) => handleFilterChange('general_result', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">전체</option>
-            {GENERAL_RESULT_OPTIONS.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
+      {/* 카테고리 탭 */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="container mx-auto px-4">
+          <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
+            <TabsList className="grid w-full grid-cols-5 bg-transparent h-auto p-0">
+              {CATEGORIES.map((category) => (
+                <TabsTrigger
+                  key={category.id}
+                  value={category.id}
+                  className="flex flex-col items-center gap-1 py-3 px-4 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600"
+                >
+                  <span className="text-lg">{category.icon}</span>
+                  <span className="text-sm font-medium">{category.name}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
-      {/* 필터 초기화 버튼 */}
-      {(debouncedSearchTerm || filters.general_result || filters.proc_stage_cd || filters.pass_gubn) && (
-        <div className="flex justify-end">
-          <button
-            onClick={clearAllFilters}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            모든 필터 초기화
-          </button>
+      {/* 메인 컨텐츠 */}
+      <div className="container mx-auto px-4 py-6">
+        {loading ? (
+          <div className="space-y-4">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="space-y-3">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-16 w-full" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-6 w-24" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
         </div>
-      )}
-
-      {/* 법안 목록 */}
-      <div className="space-y-4">
-        {bills.map((bill) => (
+        ) : displayedBills.length === 0 ? (
+          <Card className="max-w-md mx-auto">
+            <CardContent className="p-8 text-center">
+              <div className="text-4xl mb-4">📋</div>
+              <h3 className="text-lg font-semibold mb-2">검색 결과가 없습니다</h3>
+              <p className="text-gray-600 mb-4">
+                검색어나 필터 조건을 확인해보세요
+              </p>
+              <Button onClick={clearFilters} variant="outline">
+                필터 초기화
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className={`grid gap-6 ${
+              viewMode === 'grid' 
+                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+                : 'grid-cols-1'
+            }`}>
+              {displayedBills.map((bill) => (
           <BillCard
-            key={bill.id}
+                  key={bill.bill_id}
             bill={bill}
             searchTerm={debouncedSearchTerm}
             isFavorited={isFavorited(bill.bill_id)}
-            onFavoriteToggle={(billId, isFav) => toggleFavorite(billId, isFav)}
+                  onFavoriteToggle={handleFavoriteToggle}
           />
         ))}
       </div>
 
-      {bills.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <div className="text-gray-500 text-lg">
-            {debouncedSearchTerm ? '검색 결과가 없습니다.' : '법안 데이터가 없습니다.'}
-          </div>
-          {debouncedSearchTerm && (
-            <div className="text-sm text-gray-400 mt-2">
-              다른 검색어를 시도해보거나 필터를 조정해보세요.
+            {/* 무한 스크롤 로더 */}
+            {hasMore && (
+              <div ref={loadMoreRef} className="flex justify-center py-8">
+                {loadingMore && (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-gray-600">더 많은 법안을 불러오는 중...</span>
             </div>
           )}
         </div>
       )}
 
-      {/* 페이지네이션 */}
-      {totalPages > 1 && (
-        <div className="mt-8 flex justify-center">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              이전
-            </button>
-            
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-2 border rounded-md text-sm font-medium ${
-                    currentPage === pageNum
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              )
-            })}
-            
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              다음
-            </button>
-          </div>
-          
-          <div className="ml-6 text-sm text-gray-600 flex items-center">
-            {currentPage} / {totalPages} 페이지
-          </div>
+            {!hasMore && displayedBills.length > 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-600">모든 법안을 불러왔습니다</p>
         </div>
       )}
+          </>
+        )}
+      </div>
     </div>
   )
 } 
