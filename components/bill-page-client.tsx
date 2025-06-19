@@ -195,7 +195,6 @@ export default function BillPageClient() {
       setCurrentPage(1) // 필터 변경시 첫 페이지로 리셋
       filterAndDisplayBills()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps  
   }, [debouncedSearchTerm, filters, activeCategory, sortBy, dataLoaded, allBills])
 
   // 페이지 변경시 표시되는 데이터 업데이트
@@ -233,7 +232,7 @@ export default function BillPageClient() {
         observerRef.current.disconnect()
       }
     }
-  }, [hasMore, loading, loadingMore, activeCategory])
+  }, [hasMore, loading, loadingMore, activeCategory, loadMoreBills])
 
   // 정렬 함수 분리
   const sortBills = (bills: Bill[], category?: string) => {
@@ -514,9 +513,9 @@ export default function BillPageClient() {
     const endIndex = currentPage * itemsPerPage
     setDisplayedBills(filtered.slice(startIndex, endIndex))
     setHasMore(endIndex < filtered.length)
-  }
+  }, [allBills, activeCategory, debouncedSearchTerm, filters, currentPage, itemsPerPage, sortBills])
 
-  const loadMoreBills = () => {
+  const loadMoreBills = useCallback(() => {
     if (!loadingMore && hasMore && filteredBills.length > 0) {
       setLoadingMore(true)
       const nextPage = currentPage + 1
@@ -530,7 +529,7 @@ export default function BillPageClient() {
         setLoadingMore(false)
       }, 100) // 부드러운 로딩 효과
     }
-  }
+  }, [loadingMore, hasMore, filteredBills, currentPage, itemsPerPage])
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
