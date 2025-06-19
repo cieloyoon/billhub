@@ -9,8 +9,6 @@ import { formatDateUTC } from '@/lib/utils'
 import { useBillSync } from '@/hooks/use-bill-sync'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 
 interface BaseBill {
   id?: number
