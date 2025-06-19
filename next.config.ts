@@ -3,11 +3,11 @@ import type { NextConfig } from "next";
 /** @type {import('next').NextConfig} */
 const nextConfig: NextConfig = {
   eslint: {
-    // 빌드 시 ESLint 오류를 무시하여 배포 가능하게 함
+    // 빌드 시 ESLint 완전 무시
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // 빌드 시 TypeScript 오류를 무시할지 설정
+    // TypeScript 오류는 검사
     ignoreBuildErrors: false,
   },
   /* config options here */
