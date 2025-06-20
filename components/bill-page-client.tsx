@@ -422,11 +422,32 @@ export default function BillPageClient() {
         bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
       ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
       
-      setRecentBills({
-        recentProposed,
-        recentProcessed,
-        recentUpdated: [] // API에서 가져오는 것과 다르므로 일단 빈 배열
-      })
+      // recent-bills API에서 진행 상태 변경 데이터 가져오기
+      try {
+        const recentResponse = await fetch('/api/recent-bills')
+        if (recentResponse.ok) {
+          const recentData = await recentResponse.json()
+          setRecentBills({
+            recentProposed,
+            recentProcessed,
+            recentUpdated: recentData.recentUpdated || []
+          })
+        } else {
+          console.warn('최근 법안 API 호출 실패, 기본 데이터 사용')
+          setRecentBills({
+            recentProposed,
+            recentProcessed,
+            recentUpdated: []
+          })
+        }
+      } catch (apiError) {
+        console.warn('최근 법안 API 호출 중 오류:', apiError)
+        setRecentBills({
+          recentProposed,
+          recentProcessed,
+          recentUpdated: []
+        })
+      }
       
     } catch (err) {
       console.error('❌ 전체 데이터 로딩 실패:', err)
