@@ -4,11 +4,12 @@ import BillDetailClient from '@/components/bill-detail-client'
 export const dynamic = 'force-dynamic'
 
 interface BillDetailPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
-export default function BillDetailPage({ params }: BillDetailPageProps) {
-  return <BillDetailClient billId={params.id} />
+export default async function BillDetailPage({ params }: BillDetailPageProps) {
+  const { id } = await params
+  return <BillDetailClient billId={id} />
 } 
