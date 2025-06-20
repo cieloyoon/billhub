@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { FavoriteButton } from '@/components/bill/favorite-button'
 import { VoteButtons } from '@/components/bill/vote-buttons'
 import { VoteStats } from '@/components/bill/vote-stats'
+
 import { Bill } from '@/types/bill'
 
 interface BillDetailHeaderProps {

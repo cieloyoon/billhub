@@ -12,7 +12,9 @@ interface Bill {
   bill_no: string
   bill_name: string
   proposer_kind: string
+  proposer: string
   propose_dt: string
+  proc_dt: string
   general_result: string
   proc_stage_cd: string
   pass_gubn: string
@@ -59,7 +61,9 @@ export async function GET() {
         bill_no,
         bill_name,
         proposer_kind,
+        proposer,
         propose_dt,
+        proc_dt,
         general_result,
         proc_stage_cd,
         pass_gubn,

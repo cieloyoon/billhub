@@ -16,6 +16,7 @@ interface BaseBill {
   bill_no: string | null
   bill_name: string | null
   proposer_kind: string | null
+  proposer:string | null
   propose_dt: string | null
   proc_dt?: string | null
   general_result: string | null
@@ -151,8 +152,8 @@ export function BillCard({
     <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 border-l-blue-500 hover:border-l-blue-600 h-full flex flex-col pb-0" onClick={handleClick}>
       {/* ========== 상단 구역: 제목과 기본 정보 ========== */}
       <CardHeader className="pb-3 flex-shrink-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0 pr-2">
             <CardTitle className="text-base font-semibold text-foreground group-hover:text-blue-600 transition-colors line-clamp-2 mb-3 leading-tight">
               {searchTerm ? 
                 highlightSearchTerm(bill.bill_name || '제목 없음', searchTerm) : 
@@ -182,7 +183,7 @@ export function BillCard({
               )}
             </div>
             
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <FileText className="h-3 w-3 flex-shrink-0" />
                 <span className="font-medium">
@@ -196,7 +197,14 @@ export function BillCard({
               {bill.proposer_kind && (
                 <div className="flex items-center gap-1">
                   <User className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{bill.proposer_kind}</span>
+                  <span className="truncate">
+                    {bill.proposer_kind}
+                    {bill.proposer && (
+                      <span className="text-muted-foreground ml-1 truncate">
+                        ({bill.proposer.length > 20 ? bill.proposer.substring(0, 20) + '...' : bill.proposer})
+                      </span>
+                    )}
+                  </span>
                 </div>
               )}
             </div>

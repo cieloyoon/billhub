@@ -7,7 +7,9 @@ import { Loader2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { MyBillPageHeader } from '@/components/bill-page/mybill-page-header'
-import { FavoritesGrid } from '@/components/bill-page/favorites-grid'
+import { BillGrid } from '@/components/bill-page/bill-grid'
+import { useFavorites } from '@/hooks/use-favorites'
+import { Bill } from '@/types/bill-page'
 
 interface FavoriteBill {
   bill_id: string
@@ -18,7 +20,9 @@ interface FavoriteBill {
     bill_no: string | null
     bill_name: string | null
     proposer_kind: string | null
+    proposer: string | null
     propose_dt: string | null
+    proc_dt: string | null
     general_result: string | null
     proc_stage_cd: string | null
     pass_gubn: string | null
@@ -33,6 +37,7 @@ export default function MyBillPage() {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [mounted, setMounted] = useState(false)
+  const { isFavorited, toggleFavorite } = useFavorites()
 
   useEffect(() => {
     setMounted(true)
@@ -104,6 +109,18 @@ export default function MyBillPage() {
     setFavorites(prev => prev.filter(fav => fav.bill_id !== billId))
   }
 
+  const handleFavoriteToggle = (billId: string, isFav: boolean) => {
+    toggleFavorite(billId, isFav)
+    if (!isFav) {
+      handleRemoveFavorite(billId)
+    }
+  }
+
+  // FavoriteBill을 Bill 타입으로 변환
+  const convertedBills: Bill[] = favorites.map(favorite => ({
+    ...favorite.bills
+  })).filter(bill => bill.bill_id) // null 값 제거
+
   if (!mounted || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -157,16 +174,17 @@ export default function MyBillPage() {
 
       {/* 메인 컨텐츠 */}
       <div className="container mx-auto px-4 py-6">
-        {favorites.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600 mb-4">즐겨찾기로 저장한 법안들을 확인할 수 있습니다.</p>
-          </div>
-        ) : null}
-        
-        <FavoritesGrid
-          favorites={favorites}
+        <BillGrid 
+          bills={convertedBills}
+          loading={false}
+          loadingMore={false}
+          hasMore={false}
           viewMode={viewMode}
-          onRemoveFavorite={handleRemoveFavorite}
+          searchTerm=""
+          isFavorited={isFavorited}
+          onFavoriteToggle={handleFavoriteToggle}
+          onClearFilters={() => {}}
+          loadMoreRef={{ current: null } as React.RefObject<HTMLDivElement>}
         />
       </div>
     </div>
