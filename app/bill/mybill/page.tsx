@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { BillCard } from '@/components/bill/bill-card'
-import { ArrowLeft } from 'lucide-react'
-import { formatDateUTC } from '@/lib/utils'
+import { Loader2, AlertCircle } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { MyBillPageHeader } from '@/components/bill-page/mybill-page-header'
+import { FavoritesGrid } from '@/components/bill-page/favorites-grid'
 
 interface FavoriteBill {
   bill_id: string
@@ -26,13 +27,15 @@ interface FavoriteBill {
 }
 
 export default function MyBillPage() {
-  const router = useRouter()
   const [favorites, setFavorites] = useState<FavoriteBill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     try {
       const client = createClient()
       setSupabase(client)
@@ -101,14 +104,15 @@ export default function MyBillPage() {
     setFavorites(prev => prev.filter(fav => fav.bill_id !== billId))
   }
 
-
-
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-gray-600">즐겨찾기 목록을 불러오는 중...</div>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+            <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">즐겨찾기 목록 로딩 중</h2>
+          <p className="text-gray-600">잠시만 기다려주세요...</p>
         </div>
       </div>
     )
@@ -117,64 +121,53 @@ export default function MyBillPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-600 mb-4">{error}</div>
-          <button
-            onClick={loadFavorites}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            다시 시도
-          </button>
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <CardTitle className="text-red-500">오류 발생</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <Button onClick={loadFavorites} className="w-full">
+                다시 시도
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 헤더 */}
-        <div className="mb-6">
-          <div className="flex items-center gap-4 mb-4">
-            <button
-              onClick={() => router.back()}
-              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">내 즐겨찾기</h1>
-          </div>
-          <p className="text-gray-600">즐겨찾기로 저장한 법안들을 확인할 수 있습니다.</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <MyBillPageHeader 
+            totalCount={favorites.length}
+            dataLoaded={true}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
         </div>
+      </div>
 
-        {/* 즐겨찾기 목록 */}
+      {/* 메인 컨텐츠 */}
+      <div className="container mx-auto px-4 py-6">
         {favorites.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-gray-500 text-lg mb-2">즐겨찾기한 법안이 없습니다.</div>
-            <div className="text-sm text-gray-400 mb-4">
-              관심 있는 법안에 별표를 눌러 즐겨찾기에 추가해보세요.
-            </div>
-            <button
-              onClick={() => router.push('/bill')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              법안 목록 보기
-            </button>
+            <p className="text-gray-600 mb-4">즐겨찾기로 저장한 법안들을 확인할 수 있습니다.</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {favorites.map((favorite) => (
-              <BillCard
-                key={favorite.bill_id}
-                bill={favorite.bills}
-                isFavorited={true}
-                onFavoriteToggle={() => {}}
-                onRemoveFavorite={handleRemoveFavorite}
-                extraDateInfo={`즐겨찾기 추가일: ${formatDateUTC(favorite.created_at)}`}
-              />
-            ))}
-          </div>
-        )}
+        ) : null}
+        
+        <FavoritesGrid
+          favorites={favorites}
+          viewMode={viewMode}
+          onRemoveFavorite={handleRemoveFavorite}
+        />
       </div>
     </div>
   )
