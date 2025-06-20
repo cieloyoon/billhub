@@ -25,12 +25,29 @@ export function createClient() {
         update: () => Promise.resolve({ data: null, error: null }),
         delete: () => Promise.resolve({ data: null, error: null }),
       }),
-    } as ReturnType<typeof createBrowserClient>;
+      channel: () => ({
+        on: () => ({ subscribe: () => {} }),
+        subscribe: () => 'SUBSCRIBED',
+      }),
+      removeChannel: () => Promise.resolve(),
+    } as any;
     
     return dummyClient;
   }
+
+  client = createBrowserClient(config.url, config.key, {
+    realtime: {
+      params: {
+        eventsPerSecond: 10, // 초당 이벤트 제한
+      },
+    },
+    global: {
+      headers: {
+        'X-Client-Name': 'lawpage-app',
+      },
+    },
+  });
   
-  client = createBrowserClient(config.url, config.key);
   return client;
 }
 

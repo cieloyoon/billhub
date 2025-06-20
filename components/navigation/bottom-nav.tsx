@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { href: "/", label: "홈", icon: Home },
   { href: "/bill", label: "법안", icon: FileText },
-  { href: "/bill/mybill", label: "내 법안", icon: Heart },
+  { href: "/bill/mybill", label: "관심 법안", icon: Heart },
   { href: "/notifications", label: "알림", icon: Bell },
 ]
 
@@ -20,7 +20,8 @@ export function BottomNav() {
       <div className="flex items-center justify-around px-2">
         {navItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || 
+            (item.href === "/bill" && pathname.startsWith("/bill/") && pathname !== "/bill/mybill")
           
           return (
             <Link

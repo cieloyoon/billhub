@@ -5,6 +5,7 @@ import "./globals.css"
 import { HeaderAuth } from "@/components/auth/header-auth"
 import { BillSyncProvider } from "@/hooks/use-bill-sync"
 import { BottomNav } from "@/components/navigation/bottom-nav"
+import { DesktopNav } from "@/components/navigation/desktop-nav"
 
 export const metadata: Metadata = {
   title: "Billhub",
@@ -50,26 +51,7 @@ export default function RootLayout({
                       Billhub
                     </span>
                   </Link>
-                  <nav className="flex items-center space-x-6 text-sm font-medium">
-                    <Link
-                      className="transition-colors hover:text-foreground/80 text-foreground touch-optimized"
-                      href="/bill"
-                    >
-                      Bill
-                    </Link>
-                    <Link
-                      className="transition-colors hover:text-foreground/80 text-foreground/60 touch-optimized"
-                      href="/bill/mybill"
-                    >
-                      MyBill
-                    </Link>
-                    <Link
-                      className="transition-colors hover:text-foreground/80 text-foreground/60 touch-optimized"
-                      href="/notifications"
-                    >
-                      Notification
-                    </Link>
-                  </nav>
+                  <DesktopNav />
                 </div>
                 
                 <div className="flex flex-1 items-center justify-end space-x-2">

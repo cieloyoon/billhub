@@ -20,14 +20,14 @@ export function MyBillPageHeader({
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">내 즐겨찾기</h1>
+        <h1 className="text-2xl font-bold text-gray-900">관심 법안</h1>
         {!dataLoaded ? (
           <div className="mt-1">
             <Skeleton className="h-5 w-40" />
           </div>
         ) : (
           <p className="text-gray-600 mt-1">
-            총 <span className="font-semibold text-gray-900">{totalCount.toLocaleString()}</span>개의 즐겨찾기 법안
+            총 <span className="font-semibold text-gray-900">{totalCount.toLocaleString()}</span>개의 관심 법안
           </p>
         )}
       </div>

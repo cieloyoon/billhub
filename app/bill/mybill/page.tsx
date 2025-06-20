@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Loader2, AlertCircle } from 'lucide-react'
@@ -27,6 +27,8 @@ interface FavoriteBill {
     proc_stage_cd: string | null
     pass_gubn: string | null
     summary: string | null
+    created_at?: string | null
+    updated_at?: string | null
   }
 }
 
@@ -38,6 +40,7 @@ export default function MyBillPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [mounted, setMounted] = useState(false)
   const { isFavorited, toggleFavorite } = useFavorites()
+  const loadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -118,7 +121,10 @@ export default function MyBillPage() {
 
   // FavoriteBill을 Bill 타입으로 변환
   const convertedBills: Bill[] = favorites.map(favorite => ({
-    ...favorite.bills
+    ...favorite.bills,
+    created_at: favorite.bills.created_at || null,
+    updated_at: favorite.bills.updated_at || null,
+    last_api_check: null
   })).filter(bill => bill.bill_id) // null 값 제거
 
   if (!mounted || loading) {
@@ -128,7 +134,7 @@ export default function MyBillPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
             <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">즐겨찾기 목록 로딩 중</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">관심 법안 목록 로딩 중</h2>
           <p className="text-gray-600">잠시만 기다려주세요...</p>
         </div>
       </div>
@@ -186,7 +192,7 @@ export default function MyBillPage() {
           isFavorited={isFavorited}
           onFavoriteToggle={handleFavoriteToggle}
           onClearFilters={() => {}}
-          loadMoreRef={{ current: null } as React.RefObject<HTMLDivElement>}
+          loadMoreRef={loadMoreRef as React.RefObject<HTMLDivElement>}
         />
       </div>
     </div>

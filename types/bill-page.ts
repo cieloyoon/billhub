@@ -4,6 +4,7 @@ export interface Bill {
   bill_no: string | null
   bill_name: string | null
   proposer_kind: string | null
+  proposer: string | null
   propose_dt: string | null
   proc_dt: string | null
   general_result: string | null

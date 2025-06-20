@@ -107,7 +107,7 @@ export function NotificationDropdown() {
                   <div className="p-4">
                     <div className="flex items-start gap-3">
                       {!notification.is_read && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                        <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate text-foreground">
