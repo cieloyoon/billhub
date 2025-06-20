@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { BillCard } from '@/components/bill-card'
+import { BillCard } from '@/components/bill/bill-card'
 import { ArrowLeft } from 'lucide-react'
 import { formatDateUTC } from '@/lib/utils'
 

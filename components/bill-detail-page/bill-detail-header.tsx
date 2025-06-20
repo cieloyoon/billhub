@@ -2,9 +2,9 @@
 
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { FavoriteButton } from '@/components/favorite-button'
-import { VoteButtons } from '@/components/vote-buttons'
-import { VoteStats } from '@/components/vote-stats'
+import { FavoriteButton } from '@/components/bill/favorite-button'
+import { VoteButtons } from '@/components/bill/vote-buttons'
+import { VoteStats } from '@/components/bill/vote-stats'
 import { Bill } from '@/types/bill'
 
 interface BillDetailHeaderProps {

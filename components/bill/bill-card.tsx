@@ -2,9 +2,9 @@
 
 import { useRouter } from 'next/navigation'
 import { Calendar, User, FileText, TrendingUp, Clock, CheckCircle, XCircle } from 'lucide-react'
-import { FavoriteButton } from '@/components/favorite-button'
-import { VoteButtons } from '@/components/vote-buttons'
-import { VoteStats } from '@/components/vote-stats'
+import { FavoriteButton } from '@/components/bill/favorite-button'
+import { VoteButtons } from '@/components/bill/vote-buttons'
+import { VoteStats } from '@/components/bill/vote-stats'
 import { formatDateUTC } from '@/lib/utils'
 import { useBillSync } from '@/hooks/use-bill-sync'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

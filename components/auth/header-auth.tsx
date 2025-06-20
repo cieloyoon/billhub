@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Button } from "./ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
+import { Button } from "../ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu"
+} from "../ui/dropdown-menu"
 import { LogOut, User, Settings } from "lucide-react"
 import { createClient, isConfigured } from "@/lib/supabase/client"
 import type { User as SupabaseUser, AuthChangeEvent, Session } from "@supabase/supabase-js"

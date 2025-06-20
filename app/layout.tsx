@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next"
 import type React from "react"
 import Link from "next/link"
 import "./globals.css"
-import { HeaderAuth } from "@/components/header-auth"
+import { HeaderAuth } from "@/components/auth/header-auth"
 import { BillSyncProvider } from "@/hooks/use-bill-sync"
-import { BottomNav } from "@/components/bottom-nav"
+import { BottomNav } from "@/components/navigation/bottom-nav"
 
 export const metadata: Metadata = {
   title: "Billhub",

@@ -1,4 +1,4 @@
-import BillDetailClient from '@/components/bill-detail-client'
+import BillDetailClient from '@/components/bill/bill-detail-client'
 
 // 동적 렌더링 강제
 export const dynamic = 'force-dynamic'

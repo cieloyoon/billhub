@@ -15,7 +15,7 @@ import { BillCategoryTabs } from '@/components/bill-page/bill-category-tabs'
 import { BillGrid } from '@/components/bill-page/bill-grid'
 import { RecentBillsTabs } from '@/components/bill-page/recent-bills-tabs'
 
-export default function BillPageClient() {
+export default function BillPageRefactored() {
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
   const { isFavorited, toggleFavorite } = useFavorites()
   
