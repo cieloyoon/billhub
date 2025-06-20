@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Bell } from 'lucide-react'
+import { Bell, CheckCheck } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
@@ -12,9 +12,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useNotifications, type Notification } from '@/hooks/use-notifications'
 
 export function NotificationDropdown() {
-  const { notifications, unreadCount, fetchNotifications, markAsRead } = useNotifications()
+  const { notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead } = useNotifications()
   const [isOpen, setIsOpen] = useState(false)
   const [recentNotifications, setRecentNotifications] = useState<Notification[]>([])
+  const [isMarkingAll, setIsMarkingAll] = useState(false)
 
   // 드롭다운이 열릴 때 최신 알림 5개 가져오기
   useEffect(() => {
@@ -25,11 +26,32 @@ export function NotificationDropdown() {
     }
   }, [isOpen])
 
+  // 마크다운 볼드 처리를 HTML로 변환
+  const formatMessage = (message: string) => {
+    return message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  }
+
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
       await markAsRead(notification.id)
     }
     setIsOpen(false)
+  }
+
+  const handleMarkAllAsRead = async () => {
+    if (unreadCount === 0 || isMarkingAll) return
+    
+    setIsMarkingAll(true)
+    try {
+      await markAllAsRead()
+      // 알림 목록 새로고침
+      const data = await fetchNotifications(1, false)
+      setRecentNotifications(data.notifications.slice(0, 5))
+    } catch (error) {
+      console.error('모든 알림 읽음 처리 오류:', error)
+    } finally {
+      setIsMarkingAll(false)
+    }
   }
 
   return (
@@ -50,11 +72,22 @@ export function NotificationDropdown() {
       <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">알림</h3>
-          <Link href="/notifications">
-            <Button variant="ghost" size="sm" className="text-sm text-muted-foreground hover:text-foreground">
-              모두 보기
+          {unreadCount > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+              onClick={handleMarkAllAsRead}
+              disabled={isMarkingAll}
+            >
+              {isMarkingAll ? (
+                <div className="animate-spin rounded-full h-3 w-3 border-b border-current" />
+              ) : (
+                <CheckCheck className="w-3 h-3" />
+              )}
+              모두 읽음
             </Button>
-          </Link>
+          )}
         </div>
         
         <ScrollArea className="h-[400px]">
@@ -77,15 +110,14 @@ export function NotificationDropdown() {
                         <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${
-                          notification.is_read ? 'text-muted-foreground' : 'text-foreground'
-                        }`}>
+                        <p className="text-sm font-semibold truncate text-foreground">
                           {notification.title}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p 
+                          className="text-xs text-muted-foreground mt-1 line-clamp-4 whitespace-pre-line"
+                          dangerouslySetInnerHTML={{ __html: formatMessage(notification.message) }}
+                        />
+                        <p className="text-xs text-muted-foreground mt-2 text-right">
                           {formatDistanceToNow(new Date(notification.sent_at), {
                             addSuffix: true,
                             locale: ko

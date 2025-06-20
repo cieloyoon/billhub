@@ -27,7 +27,7 @@ export function BillPageHeader({
           </div>
         ) : (
           <p className="text-gray-600 mt-1">
-            총 <span className="font-semibold text-blue-600">{totalCount.toLocaleString()}</span>개의 법안
+            총 <span className="font-semibold text-gray-900">{totalCount.toLocaleString()}</span>개의 법안
           </p>
         )}
       </div>

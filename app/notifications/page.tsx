@@ -1,35 +1,26 @@
 'use client'
 
 import { NotificationList } from '@/components/notification/notification-list'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 export default function NotificationsPage() {
-  const router = useRouter()
-
   return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background border-b">
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.back()}
-              className="shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              뒤로
-            </Button>
-            <h1 className="text-xl font-semibold">알림</h1>
+          <div className="flex flex-col gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">알림 센터</h1>
+              <p className="text-gray-600 mt-1">법안 변경 사항을 확인하세요</p>
+            </div>
           </div>
         </div>
       </div>
       
-      <div className="container mx-auto px-4">
+      {/* 메인 컨텐츠 */}
+      <div className="container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
-          <NotificationList className="mt-4" />
+          <NotificationList />
         </div>
       </div>
     </div>

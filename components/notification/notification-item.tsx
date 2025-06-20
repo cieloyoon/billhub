@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useNotifications, type Notification } from '@/hooks/use-notifications'
 import { cn } from '@/lib/utils'
-import { Eye, ExternalLink } from 'lucide-react'
+import { Eye, ExternalLink, Clock, FileText } from 'lucide-react'
 
 interface NotificationItemProps {
   notification: Notification
@@ -67,47 +67,85 @@ export function NotificationItem({ notification }: NotificationItemProps) {
     }
   }
 
+  // 마크다운 볼드 처리를 HTML로 변환
+  const formatMessage = (message: string) => {
+    return message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  }
+
   return (
-    <div
-      className={cn(
-        "p-4 hover:bg-gray-50 transition-colors cursor-pointer",
-        !notification.is_read && "bg-blue-50 border-l-4 border-l-blue-500"
-      )}
-    >
-      <Link href={`/bill/${notification.bill_id}`} onClick={handleClick}>
-        <div className="flex items-start justify-between gap-4">
+    <Link href={`/bill/${notification.bill_id}`} onClick={handleClick}>
+      <div
+        className={cn(
+          "group p-6 hover:bg-gray-50/50 transition-all duration-200 cursor-pointer border-l-4",
+          notification.is_read 
+            ? "border-l-transparent" 
+            : "border-l-blue-500 bg-blue-50/30"
+        )}
+      >
+        <div className="flex items-start gap-4">
+          {/* 알림 아이콘 */}
+          <div className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors",
+            notification.is_read 
+              ? "bg-gray-100" 
+              : "bg-blue-100"
+          )}>
+            <FileText className={cn(
+              "w-5 h-5",
+              notification.is_read ? "text-gray-500" : "text-blue-600"
+            )} />
+          </div>
+
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant={getNotificationTypeBadgeVariant(notification.notification_type)}>
+            {/* 헤더 */}
+            <div className="flex items-center gap-3 mb-3">
+              <Badge 
+                variant={getNotificationTypeBadgeVariant(notification.notification_type)}
+                className="text-xs font-medium"
+              >
                 {getNotificationTypeText(notification.notification_type)}
               </Badge>
               {!notification.is_read && (
-                <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
               )}
-            </div>
-            
-            <h3 className="font-medium text-gray-900 mb-1 line-clamp-2">
-              {notification.title}
-            </h3>
-            
-            <p className="text-sm text-gray-600 mb-2 line-clamp-3">
-              {notification.message}
-            </p>
-            
-            {notification.bills && (
-              <div className="text-xs text-gray-500 mb-2">
-                {notification.bills.bill_no} | {notification.bills.bill_name}
-              </div>
-            )}
-            
-            <div className="flex items-center justify-between">
-              <time className="text-xs text-gray-500">
+              <div className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
+                <Clock className="w-3 h-3" />
                 {formatDistanceToNow(new Date(notification.sent_at), {
                   addSuffix: true,
                   locale: ko
                 })}
-              </time>
-              
+              </div>
+            </div>
+            
+            {/* 제목 */}
+            <h3 className={cn(
+              "font-semibold mb-2 line-clamp-1",
+              notification.is_read ? "text-gray-700" : "text-gray-900"
+            )}>
+              {notification.title}
+            </h3>
+            
+            {/* 메시지 내용 */}
+            <div 
+              className={cn(
+                "text-sm mb-3 line-clamp-3 whitespace-pre-line leading-relaxed",
+                notification.is_read ? "text-gray-500" : "text-gray-700"
+              )}
+              dangerouslySetInnerHTML={{ __html: formatMessage(notification.message) }}
+            />
+            
+            {/* 법안 정보 */}
+            {notification.bills && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 mb-3 p-2 bg-gray-50 rounded-md">
+                <FileText className="w-3 h-3 flex-shrink-0" />
+                <span className="font-medium">{notification.bills.bill_no}</span>
+                <span className="text-gray-400">|</span>
+                <span className="line-clamp-1">{notification.bills.bill_name}</span>
+              </div>
+            )}
+            
+            {/* 액션 버튼들 */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {!notification.is_read && (
                   <Button
@@ -115,24 +153,28 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                     size="sm"
                     onClick={handleMarkAsRead}
                     disabled={isMarking}
-                    className="text-xs h-6 px-2"
+                    className="text-xs h-7 px-2 hover:bg-blue-100 hover:text-blue-700"
                   >
                     {isMarking ? (
                       <div className="animate-spin rounded-full h-3 w-3 border-b border-current" />
                     ) : (
                       <>
                         <Eye className="h-3 w-3 mr-1" />
-                        읽음
+                        읽음 처리
                       </>
                     )}
                   </Button>
                 )}
-                <ExternalLink className="h-3 w-3 text-gray-400" />
+              </div>
+              
+              <div className="flex items-center gap-1 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span>자세히 보기</span>
+                <ExternalLink className="h-3 w-3" />
               </div>
             </div>
           </div>
         </div>
-      </Link>
-    </div>
+      </div>
+    </Link>
   )
 } 

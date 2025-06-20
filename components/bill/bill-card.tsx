@@ -149,12 +149,12 @@ export function BillCard({
   }
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 border-l-blue-500 hover:border-l-blue-600 h-full flex flex-col pb-0" onClick={handleClick}>
+    <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col pb-0" onClick={handleClick}>
       {/* ========== 상단 구역: 제목과 기본 정보 ========== */}
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0 pr-2">
-            <CardTitle className="text-base font-semibold text-foreground group-hover:text-blue-600 transition-colors line-clamp-2 mb-3 leading-tight">
+            <CardTitle className="text-base font-semibold text-foreground line-clamp-2 mb-3 leading-tight">
               {searchTerm ? 
                 highlightSearchTerm(bill.bill_name || '제목 없음', searchTerm) : 
                 (bill.bill_name || '제목 없음')

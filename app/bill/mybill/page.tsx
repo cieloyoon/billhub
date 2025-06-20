@@ -125,8 +125,8 @@ export default function MyBillPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-            <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+            <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">즐겨찾기 목록 로딩 중</h2>
           <p className="text-gray-600">잠시만 기다려주세요...</p>
@@ -163,12 +163,14 @@ export default function MyBillPage() {
       {/* 헤더 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <MyBillPageHeader 
-            totalCount={favorites.length}
-            dataLoaded={true}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-          />
+          <div className="flex flex-col gap-4">
+            <MyBillPageHeader 
+              totalCount={favorites.length}
+              dataLoaded={true}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+            />
+          </div>
         </div>
       </div>
 

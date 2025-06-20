@@ -32,7 +32,7 @@ export function BillCategoryTabs({
                 key={category.id}
                 value={category.id}
                 disabled={!dataLoaded}
-                className="flex flex-col items-center gap-1 py-3 px-4 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex flex-col items-center gap-1 py-3 px-4 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:border-b-2 data-[state=active]:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="text-lg">{category.icon}</span>
                 <span className="text-sm font-medium">{category.name}</span>
