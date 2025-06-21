@@ -19,7 +19,7 @@ interface FloatingWindowContextType {
 
 const FloatingWindowContext = createContext<FloatingWindowContextType | undefined>(undefined)
 
-export function FloatingWindowProvider({ children }: { children: ReactNode }): React.JSX.Element {
+export function FloatingWindowProvider({ children }: { children: ReactNode }) {
   const [windows, setWindows] = useState<FloatingWindow[]>([])
 
   const openBillDetail = useCallback((billId: string, billTitle: string) => {
