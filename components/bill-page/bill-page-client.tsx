@@ -14,6 +14,7 @@ import { BillFilterSheet } from '@/components/bill-page/bill-filter-sheet'
 import { BillCategoryTabs } from '@/components/bill-page/bill-category-tabs'
 import { BillGrid } from '@/components/bill-page/bill-grid'
 import { RecentBillsTabs } from '@/components/bill-page/recent-bills-tabs'
+import { CacheDebugPanel } from '@/components/bill-page/cache-debug-panel'
 
 export default function BillPageClient() {
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
@@ -37,6 +38,9 @@ export default function BillPageClient() {
     totalCount,
     activeFiltersCount,
     dataLoaded,
+    backgroundLoading,
+    loadingProgress,
+    cacheHit,
     loadMoreRef,
     
     // 액션들
@@ -46,6 +50,8 @@ export default function BillPageClient() {
     setViewMode,
     handleFilterChange,
     clearFilters,
+    clearCache,
+    getCacheStats,
   } = useBillPageData()
 
   const handleFavoriteToggle = (billId: string, isFav: boolean) => {
@@ -98,6 +104,9 @@ export default function BillPageClient() {
               dataLoaded={dataLoaded}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              cacheHit={cacheHit}
+              backgroundLoading={backgroundLoading}
+              loadingProgress={loadingProgress}
             />
 
             <BillSearchBar 
@@ -154,6 +163,8 @@ export default function BillPageClient() {
           />
         )}
       </div>
+
+      
     </div>
   )
 }

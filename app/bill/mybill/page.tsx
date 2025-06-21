@@ -1,121 +1,40 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { SupabaseClient } from '@supabase/supabase-js'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Loader2, AlertCircle, Zap, Database, LogIn, Heart } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { MyBillPageHeader } from '@/components/bill-page/mybill-page-header'
 import { BillGrid } from '@/components/bill-page/bill-grid'
 import { useFavorites } from '@/hooks/use-favorites'
+import { useMyBillData } from '@/hooks/use-my-bill-data'
 import { Bill } from '@/types/bill-page'
 
-interface FavoriteBill {
-  bill_id: string
-  created_at: string
-  bills: {
-    id: number
-    bill_id: string
-    bill_no: string | null
-    bill_name: string | null
-    proposer_kind: string | null
-    proposer: string | null
-    propose_dt: string | null
-    proc_dt: string | null
-    general_result: string | null
-    proc_stage_cd: string | null
-    pass_gubn: string | null
-    summary: string | null
-    created_at?: string | null
-    updated_at?: string | null
-  }
-}
-
 export default function MyBillPage() {
-  const [favorites, setFavorites] = useState<FavoriteBill[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [mounted, setMounted] = useState(false)
   const { isFavorited, toggleFavorite } = useFavorites()
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  
+  // 새로운 최적화된 훅 사용
+  const {
+    favorites,
+    loading,
+    error,
+    mounted,
+    cacheHit,
+    hybridMode,
+    loadFavorites,
+    updateFavoriteCache
+  } = useMyBillData()
 
-  useEffect(() => {
-    setMounted(true)
-    try {
-      const client = createClient()
-      setSupabase(client)
-    } catch {
-      setError('서비스에 연결할 수 없습니다.')
-      setLoading(false)
-    }
-  }, [])
-
-  const loadFavorites = useCallback(async () => {
-    if (!supabase) return
-    
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        setError('로그인이 필요합니다.')
-        return
-      }
-
-      const response = await fetch('/api/favorites')
-      if (response.ok) {
-        const { favorites: favoritesList } = await response.json()
-        // 의안번호 내림차순으로 정렬
-        const sortedFavorites = favoritesList.sort((a: FavoriteBill, b: FavoriteBill) => {
-          const aIsNumber = /^\d/.test(a.bills.bill_no || '')
-          const bIsNumber = /^\d/.test(b.bills.bill_no || '')
-          
-          // 숫자로 시작하는 것을 앞에, 문자로 시작하는 것을 뒤에
-          if (aIsNumber && !bIsNumber) return -1
-          if (!aIsNumber && bIsNumber) return 1
-          
-          // 둘 다 숫자로 시작하면 숫자 값으로 내림차순 정렬
-          if (aIsNumber && bIsNumber) {
-            const aNum = parseInt(a.bills.bill_no || '0', 10)
-            const bNum = parseInt(b.bills.bill_no || '0', 10)
-            return bNum - aNum
-          }
-          
-          // 둘 다 문자로 시작하면 문자열로 내림차순 정렬
-          return (b.bills.bill_no || '').localeCompare(a.bills.bill_no || '')
-        })
-        setFavorites(sortedFavorites)
-      } else {
-        const errorData = await response.json()
-        setError(errorData.error || '즐겨찾기 목록을 불러오는데 실패했습니다.')
-      }
-    } catch (error) {
-      console.error('Error loading favorites:', error)
-      setError('즐겨찾기 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase])
-
-  useEffect(() => {
-    if (supabase) {
-      loadFavorites()
-    }
-  }, [supabase, loadFavorites])
-
-  const handleRemoveFavorite = (billId: string) => {
-    setFavorites(prev => prev.filter(fav => fav.bill_id !== billId))
-  }
-
-  const handleFavoriteToggle = (billId: string, isFav: boolean) => {
+  const handleFavoriteToggle = async (billId: string, isFav: boolean) => {
+    // 기존 즐겨찾기 로직
     toggleFavorite(billId, isFav)
+    
+    // 캐시 업데이트 (즐겨찾기 제거시)
     if (!isFav) {
-      handleRemoveFavorite(billId)
+      await updateFavoriteCache(billId, 'remove')
     }
   }
 
@@ -142,6 +61,48 @@ export default function MyBillPage() {
   }
 
   if (error) {
+    // 로그인 필요 에러인 경우 특별한 UI 표시
+    if (error.includes('로그인이 필요합니다')) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="container mx-auto px-4 py-8">
+            <Card className="max-w-md mx-auto">
+              <CardHeader className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4 mx-auto">
+                  <Heart className="h-8 w-8 text-blue-600" />
+                </div>
+                <CardTitle className="text-xl text-gray-900">관심 법안을 확인하려면</CardTitle>
+                <p className="text-gray-600 mt-2">로그인이 필요해요</p>
+              </CardHeader>
+              <CardContent className="text-center">
+                <p className="text-gray-600 mb-6">
+                  로그인하시면 관심 있는 법안을 저장하고<br />
+                  언제든지 빠르게 확인할 수 있어요
+                </p>
+                <div className="space-y-3">
+                  <Button 
+                    onClick={() => window.location.href = '/auth/login'} 
+                    className="w-full"
+                  >
+                    <LogIn className="h-4 w-4 mr-2" />
+                    로그인하기
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => window.location.href = '/bill'} 
+                    className="w-full"
+                  >
+                    법안 목록 보기
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )
+    }
+
+    // 일반 에러인 경우
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="container mx-auto px-4 py-8">
@@ -170,9 +131,10 @@ export default function MyBillPage() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex flex-col gap-4">
+
             <MyBillPageHeader 
               totalCount={favorites.length}
-              dataLoaded={true}
+              dataLoaded={!loading}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
             />

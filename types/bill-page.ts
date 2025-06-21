@@ -35,3 +35,20 @@ export interface RecentBillsData {
     bills: Bill
   }>
 }
+
+export interface CacheMetadata {
+  lastUpdated: number
+  version: string
+  totalCount: number
+}
+
+export interface CacheStats {
+  size: number
+  lastUpdated: Date | null
+  totalCount: number
+}
+
+export interface BillCacheData {
+  bills: Bill[]
+  metadata: CacheMetadata
+}

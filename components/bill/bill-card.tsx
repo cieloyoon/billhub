@@ -152,14 +152,23 @@ export function BillCard({
     <Card className="group hover:shadow-lg transition-all duration-200 cursor-pointer h-full flex flex-col pb-0" onClick={handleClick}>
       {/* ========== 상단 구역: 제목과 기본 정보 ========== */}
       <CardHeader className="pb-3 flex-shrink-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0 pr-2">
-            <CardTitle className="text-base font-semibold text-foreground line-clamp-2 mb-3 leading-tight">
-              {searchTerm ? 
-                highlightSearchTerm(bill.bill_name || '제목 없음', searchTerm) : 
-                (bill.bill_name || '제목 없음')
-              }
-            </CardTitle>
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <CardTitle className="text-base font-semibold text-foreground line-clamp-2 leading-tight flex-1 min-w-0 pr-2">
+                {searchTerm ? 
+                  highlightSearchTerm(bill.bill_name || '제목 없음', searchTerm) : 
+                  (bill.bill_name || '제목 없음')
+                }
+              </CardTitle>
+              <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
+                <FavoriteButton 
+                  billId={bill.bill_id}
+                  initialIsFavorited={isFavorited}
+                  onToggle={handleFavoriteToggle}
+                />
+              </div>
+            </div>
             
             {/* 상태 배지들 */}
             <div className="flex flex-wrap gap-2 mb-3">
@@ -208,14 +217,6 @@ export function BillCard({
                 </div>
               )}
             </div>
-          </div>
-          
-          <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
-            <FavoriteButton 
-              billId={bill.bill_id}
-              initialIsFavorited={isFavorited}
-              onToggle={handleFavoriteToggle}
-            />
           </div>
         </div>
       </CardHeader>

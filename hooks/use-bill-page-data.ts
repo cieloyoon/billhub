@@ -6,6 +6,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Bill, FilterState, RecentBillsData } from '@/types/bill-page'
+import { billCache } from '@/lib/bill-cache'
 
 export function useBillPageData() {
   const [allBills, setAllBills] = useState<Bill[]>([]) // 전체 데이터 캐시
@@ -39,9 +40,13 @@ export function useBillPageData() {
   const [totalCount, setTotalCount] = useState(0)
   const [activeFiltersCount, setActiveFiltersCount] = useState(0)
   const [dataLoaded, setDataLoaded] = useState(false)
+  const [backgroundLoading, setBackgroundLoading] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [cacheHit, setCacheHit] = useState(false)
   
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const backgroundLoadingRef = useRef(false)
   
   const itemsPerPage = 12
 
@@ -113,24 +118,51 @@ export function useBillPageData() {
 
   // 무한 스크롤 설정
   useEffect(() => {
-    if (loadMoreRef.current && hasMore && !loading && !loadingMore && activeCategory !== 'recent') {
+    // 기존 observer 정리
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
+    }
+
+    // 새 observer 설정 조건 체크
+    if (
+      loadMoreRef.current && 
+      hasMore && 
+      !loading && 
+      !loadingMore && 
+      activeCategory !== 'recent' &&
+      dataLoaded &&
+      displayedBills.length > 0
+    ) {
+      console.log('🔍 무한 스크롤 observer 설정:', { 
+        hasMore, 
+        loading, 
+        loadingMore, 
+        activeCategory, 
+        dataLoaded,
+        displayedCount: displayedBills.length 
+      })
+
       observerRef.current = new IntersectionObserver(
         (entries) => {
           if (entries[0].isIntersecting) {
+            console.log('📜 무한 스크롤 트리거됨')
             loadMoreBills()
           }
         },
         { threshold: 0.1 }
       )
+      
       observerRef.current.observe(loadMoreRef.current)
     }
 
     return () => {
       if (observerRef.current) {
         observerRef.current.disconnect()
+        observerRef.current = null
       }
     }
-  }, [hasMore, loading, loadingMore, activeCategory])
+  }, [hasMore, loading, loadingMore, activeCategory, dataLoaded, displayedBills.length])
 
   // 정렬 함수 분리
   const sortBills = (bills: Bill[], category?: string) => {
@@ -241,36 +273,88 @@ export function useBillPageData() {
       
       return 0
     })
-  }  // 전체 데이터를 페이징으로 로드
-  const loadAllBills = useCallback(async () => {
-    if (!supabase) return
+  }  // 캐시에서 빠른 로드 시도
+  const loadFromCache = useCallback(async (): Promise<Bill[] | null> => {
+    try {
+      console.log('🔍 캐시에서 데이터 로드 시도...')
+      const cachedBills = await billCache.getCachedBills()
+      
+      if (cachedBills && cachedBills.length > 0) {
+        console.log(`⚡ 캐시 히트! ${cachedBills.length}개 법안 즉시 로드`)
+        setCacheHit(true)
+        return cachedBills
+      }
+      
+      console.log('💾 캐시 미스 - DB에서 로드 필요')
+      setCacheHit(false)
+      return null
+    } catch (error) {
+      console.error('캐시 로드 실패:', error)
+      setCacheHit(false)
+      return null
+    }
+  }, [])
+
+  // 최신 1000개만 빠르게 로드 (화면 즉시 표시용)
+  const loadInitialBills = useCallback(async (): Promise<Bill[]> => {
+    if (!supabase) return []
     
-    setLoading(true)
-    setError(null)
+    console.log('🚀 최신 1000개 법안 우선 로드 중...')
+    
+    const { data, error, count } = await supabase
+      .from('bills')
+      .select('*', { count: 'exact' })
+      .order('propose_dt', { ascending: false, nullsFirst: false })
+      .order('bill_no', { ascending: false, nullsFirst: false })
+      .limit(1000)
+
+    if (error) {
+      throw new Error(`초기 데이터 로딩 오류: ${error.message}`)
+    }
+
+    const bills = data || []
+    const totalCount = count || 0
+    
+    console.log(`✅ 초기 ${bills.length}개 법안 로드 완료 (전체: ${totalCount}개)`)
+    
+    setTotalCount(totalCount)
+    return bills
+  }, [supabase])
+
+  // 백그라운드에서 나머지 데이터 로드
+  const loadRemainingBills = useCallback(async (initialBills: Bill[]) => {
+    if (!supabase || backgroundLoadingRef.current) return
+    
+    backgroundLoadingRef.current = true
+    setBackgroundLoading(true)
+    setLoadingProgress(0)
     
     try {
-      console.log('🚀 전체 데이터 페이징 로드 시작')
+      console.log('🔄 백그라운드에서 나머지 데이터 로드 시작...')
       
-      const pageSize = 1000
-      let allBills: Bill[] = []
-      let page = 0
-      let hasMore = true
-      let totalCount = 0
-
-      // 첫 번째 요청으로 총 개수 확인
+      // 총 개수 확인
       const { count } = await supabase
         .from('bills')
         .select('*', { count: 'exact', head: true })
       
-      totalCount = count || 0
-      console.log(`📊 총 ${totalCount}개의 법안 데이터를 로드합니다`)
-
-      // 페이징으로 전체 데이터 로드
-      while (hasMore) {
+      const totalCount = count || 0
+      const remainingCount = totalCount - initialBills.length
+      
+      if (remainingCount <= 0) {
+        console.log('🎉 모든 데이터가 이미 로드됨')
+        await billCache.setCachedBills(initialBills, totalCount)
+        return initialBills
+      }
+      
+      console.log(`📦 추가로 ${remainingCount}개 법안 로드 예정`)
+      
+      const pageSize = 1000
+      let allBills = [...initialBills]
+      let page = 1 // 첫 번째 페이지는 이미 로드됨
+      
+      while (allBills.length < totalCount) {
         const from = page * pageSize
         const to = from + pageSize - 1
-
-        console.log(`📄 페이지 ${page + 1} 로딩 중... (${from + 1} ~ ${Math.min(to + 1, totalCount)})`)
 
         const { data, error: fetchError } = await supabase
           .from('bills')
@@ -280,78 +364,155 @@ export function useBillPageData() {
           .range(from, to)
 
         if (fetchError) {
-          throw new Error(`페이지 ${page + 1} 로딩 오류: ${fetchError.message}`)
+          console.error(`페이지 ${page + 1} 로딩 오류:`, fetchError)
+          break
         }
 
         const bills = data || []
-        allBills = [...allBills, ...bills]
+        if (bills.length === 0) break
         
-        // 다음 페이지가 있는지 확인
-        hasMore = bills.length === pageSize && allBills.length < totalCount
+        allBills = [...allBills, ...bills]
         page++
 
-        // 진행률 표시
-        const progress = Math.round((allBills.length / totalCount) * 100)
-        console.log(`⏳ 로딩 진행률: ${progress}% (${allBills.length}/${totalCount})`)
+        // 진행률 업데이트
+        const progress = Math.min(Math.round((allBills.length / totalCount) * 100), 100)
+        setLoadingProgress(progress)
+        
+        console.log(`📄 백그라운드 로딩: ${progress}% (${allBills.length}/${totalCount})`)
+        
+        // UI 블로킹 방지를 위한 짧은 대기
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
-      console.log('✅ 전체 데이터 로딩 완료:', { 
-        총개수: totalCount, 
-        실제로드: allBills.length,
-        첫번째법안: allBills[0]?.bill_name,
-        마지막법안: allBills[allBills.length-1]?.bill_name 
-      })
+      console.log(`✅ 백그라운드 로딩 완료: ${allBills.length}개`)
       
+      // 캐시에 저장
+      await billCache.setCachedBills(allBills, totalCount)
+      
+      // 전체 데이터로 업데이트
       setAllBills(allBills)
       setTotalCount(totalCount)
-      setDataLoaded(true)
       
-      // 최근 탭을 위한 데이터도 미리 생성
-      const oneWeekAgo = new Date()
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+      return allBills
       
-      const recentProposed = allBills.filter(bill => 
-        bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
-      ).sort((a, b) => parseInt(b.bill_no?.replace(/\D/g, '') || '0') - parseInt(a.bill_no?.replace(/\D/g, '') || '0'))
+    } catch (error) {
+      console.error('백그라운드 로딩 실패:', error)
+      return initialBills
+    } finally {
+      setBackgroundLoading(false)
+      setLoadingProgress(100)
+      backgroundLoadingRef.current = false
+    }
+  }, [supabase])
+
+  // 스마트 데이터 로딩 (캐시 우선, 없으면 점진적 로딩)
+  const loadAllBills = useCallback(async () => {
+    if (!supabase) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // 1단계: 캐시에서 빠른 로드 시도
+      const cachedBills = await loadFromCache()
       
-      const recentProcessed = allBills.filter(bill => 
-        bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
-      ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
+      if (cachedBills) {
+        // 캐시 히트: 즉시 화면 표시
+        setAllBills(cachedBills)
+        setTotalCount(cachedBills.length)
+        setDataLoaded(true)
+        setLoading(false)
+        
+        // 최근 탭 데이터 생성
+        await setupRecentBills(cachedBills)
+        
+        console.log('🎯 캐시에서 즉시 로드 완료!')
+        
+        // 무한 스크롤을 위한 짧은 딜레이
+        setTimeout(() => {
+          console.log('🔄 캐시 로드 후 상태 체크 완료')
+        }, 50)
+        
+        return
+      }
       
-      // recent-bills API에서 진행 상태 변경 데이터 가져오기
-      try {
-        const recentResponse = await fetch('/api/recent-bills')
-        if (recentResponse.ok) {
-          const recentData = await recentResponse.json()
-          setRecentBills({
-            recentProposed,
-            recentProcessed,
-            recentUpdated: recentData.recentUpdated || []
+      // 2단계: 캐시 미스 - 최신 1000개 우선 로드
+      const initialBills = await loadInitialBills()
+      
+      if (initialBills.length > 0) {
+        setAllBills(initialBills)
+        setDataLoaded(true)
+        setLoading(false)
+        
+        // 화면에 즉시 표시
+        console.log('⚡ 초기 데이터로 화면 표시 시작')
+        
+        // 최근 탭 데이터 생성
+        await setupRecentBills(initialBills)
+        
+        // 무한 스크롤을 위한 짧은 딜레이
+        setTimeout(() => {
+          console.log('🔄 초기 로드 후 상태 체크 완료')
+        }, 50)
+        
+        // 3단계: 백그라운드에서 나머지 데이터 로드
+        setTimeout(() => {
+          loadRemainingBills(initialBills).then(allBills => {
+            if (allBills && allBills.length > initialBills.length) {
+              setAllBills(allBills)
+              // 업데이트된 데이터로 최근 탭 재생성
+              setupRecentBills(allBills)
+              console.log('🔄 백그라운드 로딩으로 전체 데이터 업데이트됨')
+            }
           })
-        } else {
-          console.warn('최근 법안 API 호출 실패, 기본 데이터 사용')
-          setRecentBills({
-            recentProposed,
-            recentProcessed,
-            recentUpdated: []
-          })
-        }
-      } catch (apiError) {
-        console.warn('최근 법안 API 호출 중 오류:', apiError)
+        }, 100)
+      }
+      
+    } catch (err) {
+      console.error('❌ 데이터 로딩 실패:', err)
+      setError(err instanceof Error ? err.message : '데이터를 불러오는데 실패했습니다.')
+      setLoading(false)
+    }
+  }, [supabase, loadFromCache, loadInitialBills, loadRemainingBills])
+
+  // 최근 탭 데이터 설정
+  const setupRecentBills = useCallback(async (bills: Bill[]) => {
+    const oneWeekAgo = new Date()
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+    
+    const recentProposed = bills.filter(bill => 
+      bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
+    ).sort((a, b) => parseInt(b.bill_no?.replace(/\D/g, '') || '0') - parseInt(a.bill_no?.replace(/\D/g, '') || '0'))
+    
+    const recentProcessed = bills.filter(bill => 
+      bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
+    ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
+    
+    try {
+      const recentResponse = await fetch('/api/recent-bills')
+      if (recentResponse.ok) {
+        const recentData = await recentResponse.json()
+        setRecentBills({
+          recentProposed,
+          recentProcessed,
+          recentUpdated: recentData.recentUpdated || []
+        })
+      } else {
         setRecentBills({
           recentProposed,
           recentProcessed,
           recentUpdated: []
         })
       }
-      
-    } catch (err) {
-      console.error('❌ 전체 데이터 로딩 실패:', err)
-      setError(err instanceof Error ? err.message : '데이터를 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+    } catch (apiError) {
+      console.warn('최근 법안 API 호출 중 오류:', apiError)
+      setRecentBills({
+        recentProposed,
+        recentProcessed,
+        recentUpdated: []
+      })
     }
-  }, [supabase])
+  }, [])
 
   // 클라이언트 사이드 필터링 및 표시
   const filterAndDisplayBills = useCallback(() => {
@@ -433,20 +594,47 @@ export function useBillPageData() {
   }, [allBills, activeCategory, debouncedSearchTerm, filters, currentPage, itemsPerPage, sortBills])
 
   const loadMoreBills = useCallback(() => {
-    if (!loadingMore && hasMore && filteredBills.length > 0) {
+    console.log('📜 loadMoreBills 호출됨:', {
+      loadingMore,
+      hasMore,
+      filteredLength: filteredBills.length,
+      displayedLength: displayedBills.length,
+      currentPage,
+      itemsPerPage
+    })
+
+    if (!loadingMore && hasMore && filteredBills.length > 0 && displayedBills.length > 0) {
       setLoadingMore(true)
       const nextPage = currentPage + 1
       const startIndex = 0
       const endIndex = nextPage * itemsPerPage
       
+      console.log('📄 페이지 로딩:', { nextPage, startIndex, endIndex, totalFiltered: filteredBills.length })
+      
       setTimeout(() => {
-        setDisplayedBills(filteredBills.slice(startIndex, endIndex))
+        const newDisplayed = filteredBills.slice(startIndex, endIndex)
+        const newHasMore = endIndex < filteredBills.length
+        
+        console.log('✅ 페이지 로딩 완료:', { 
+          newDisplayedLength: newDisplayed.length, 
+          newHasMore,
+          nextPage 
+        })
+        
+        setDisplayedBills(newDisplayed)
         setCurrentPage(nextPage)
-        setHasMore(endIndex < filteredBills.length)
+        setHasMore(newHasMore)
         setLoadingMore(false)
       }, 100) // 부드러운 로딩 효과
+    } else {
+      console.log('❌ loadMoreBills 조건 불만족:', {
+        loadingMore,
+        hasMore,
+        filteredLength: filteredBills.length,
+        displayedLength: displayedBills.length
+      })
     }
-  }, [loadingMore, hasMore, filteredBills, currentPage, itemsPerPage])
+  }, [loadingMore, hasMore, filteredBills, currentPage, itemsPerPage, displayedBills.length])
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -483,6 +671,9 @@ export function useBillPageData() {
     totalCount,
     activeFiltersCount,
     dataLoaded,
+    backgroundLoading,
+    loadingProgress,
+    cacheHit,
     loadMoreRef,
     
     // 액션들
@@ -493,5 +684,7 @@ export function useBillPageData() {
     handleFilterChange,
     clearFilters,
     loadMoreBills,
+    clearCache: () => billCache.clearCache(),
+    getCacheStats: () => billCache.getCacheStats()
   }
 }

@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { favoritesCache } from '@/lib/favorites-cache'
+import { billCache } from '@/lib/bill-cache'
 
 export function useFavorites() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<any>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -14,9 +18,10 @@ export function useFavorites() {
 
   const loadFavorites = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      setUser(currentUser)
       
-      if (!user) {
+      if (!currentUser) {
         setLoading(false)
         return
       }
@@ -36,21 +41,89 @@ export function useFavorites() {
 
   const isFavorited = (billId: string) => favorites.has(billId)
 
-  const toggleFavorite = (billId: string, isFavorited: boolean) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev)
-      if (isFavorited) {
-        newFavorites.add(billId)
+  const toggleFavorite = useCallback(async (billId: string, isFav: boolean) => {
+    if (!user) {
+      setError('로그인이 필요합니다.')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      if (isFav) {
+        // 즐겨찾기 추가
+        const response = await fetch('/api/favorites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bill_id: billId })
+        })
+
+        if (response.ok) {
+          setFavorites(prev => new Set([...prev, billId]))
+          
+          // 캐시 업데이트 (법안 데이터 찾아서 추가)
+          try {
+            const allBills = await billCache.getCachedBills()
+            const billData = allBills?.find(bill => bill.bill_id === billId)
+            if (billData) {
+              await favoritesCache.updateFavoriteInCache(user.id, billId, 'add', billData)
+            }
+          } catch (cacheError) {
+            console.log('캐시 업데이트 실패 (문제없음):', cacheError)
+          }
+        } else {
+          const errorData = await response.json()
+          setError(errorData.error || '즐겨찾기 추가에 실패했습니다.')
+        }
       } else {
-        newFavorites.delete(billId)
+        // 즐겨찾기 제거
+        const response = await fetch(`/api/favorites?bill_id=${billId}`, {
+          method: 'DELETE'
+        })
+
+        if (response.ok) {
+          setFavorites(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(billId)
+            return newSet
+          })
+          
+          // 캐시 업데이트
+          try {
+            await favoritesCache.updateFavoriteInCache(user.id, billId, 'remove')
+          } catch (cacheError) {
+            console.log('캐시 업데이트 실패 (문제없음):', cacheError)
+          }
+        } else {
+          const errorData = await response.json()
+          setError(errorData.error || '즐겨찾기 제거에 실패했습니다.')
+        }
       }
-      return newFavorites
+    } catch (error) {
+      console.error('Favorite toggle error:', error)
+      setError('네트워크 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  // 사용자 상태 변경 감지
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null)
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        loadFavorites()
+      }
     })
-  }
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   return {
     favorites,
     loading,
+    error,
     isFavorited,
     toggleFavorite,
     loadFavorites
