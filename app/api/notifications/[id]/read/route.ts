@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
@@ -15,9 +15,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // params가 Promise인 경우 await 처리
-    const resolvedParams = await Promise.resolve(params)
-    const { id } = resolvedParams
+    // params await 처리
+    const { id } = await params
     console.log('읽음 처리 요청:', { id, userId: user.id })
 
     const { error } = await supabase

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
@@ -15,9 +15,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // params가 Promise인 경우 await 처리
-    const resolvedParams = await Promise.resolve(params)
-    const notificationId = resolvedParams.id
+    // params await 처리
+    const { id: notificationId } = await params
     console.log('삭제 요청:', { notificationId, userId: user.id })
 
     // 알림 삭제 (RLS 정책으로 본인 알림만 삭제 가능)
