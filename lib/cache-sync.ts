@@ -98,7 +98,7 @@ class CacheSyncManager {
       const existingBills = await billCache.getCachedBills()
       if (existingBills) {
         const updatedBills = [billData, ...existingBills]
-        await billCache.setCachedBills(updatedBills)
+        await billCache.setCachedBills(updatedBills, updatedBills.length)
         console.log('✅ 캐시에 새 법안 추가됨')
       }
     } catch (error) {
@@ -114,7 +114,7 @@ class CacheSyncManager {
         const updatedBills = existingBills.map(bill => 
           bill.bill_id === billData.bill_id ? billData : bill
         )
-        await billCache.setCachedBills(updatedBills)
+        await billCache.setCachedBills(updatedBills, updatedBills.length)
         console.log('✅ 캐시 법안 수정됨')
       }
     } catch (error) {
@@ -128,7 +128,7 @@ class CacheSyncManager {
       const existingBills = await billCache.getCachedBills()
       if (existingBills) {
         const updatedBills = existingBills.filter(bill => bill.bill_id !== billId)
-        await billCache.setCachedBills(updatedBills)
+        await billCache.setCachedBills(updatedBills, updatedBills.length)
         console.log('✅ 캐시에서 법안 제거됨')
       }
     } catch (error) {
