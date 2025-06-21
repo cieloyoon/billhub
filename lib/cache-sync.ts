@@ -48,18 +48,18 @@ class CacheSyncManager {
 
       switch (eventType) {
         case 'INSERT':
-          console.log('➕ 새 법안 추가:', newRecord.bill_id)
+          console.log('➕ 새 법안 추가:', (newRecord as any)?.bill_id)
           await this.addBillToCache(newRecord)
           break
           
         case 'UPDATE':
-          console.log('✏️ 법안 수정:', newRecord.bill_id)
+          console.log('✏️ 법안 수정:', (newRecord as any)?.bill_id)
           await this.updateBillInCache(newRecord)
           break
           
         case 'DELETE':
-          console.log('🗑️ 법안 삭제:', oldRecord.bill_id)
-          await this.removeBillFromCache(oldRecord.bill_id)
+          console.log('🗑️ 법안 삭제:', (oldRecord as any)?.bill_id)
+          await this.removeBillFromCache((oldRecord as any)?.bill_id)
           break
       }
     } catch (error) {
@@ -71,19 +71,19 @@ class CacheSyncManager {
   private async handleFavoriteChange(payload: RealtimePostgresChangesPayload<any>) {
     try {
       const { eventType, new: newRecord, old: oldRecord } = payload
-      const userId = newRecord?.user_id || oldRecord?.user_id
+      const userId = (newRecord as any)?.user_id || (oldRecord as any)?.user_id
 
       if (!userId) return
 
       switch (eventType) {
         case 'INSERT':
-          console.log('⭐ 즐겨찾기 추가:', newRecord.bill_id)
+          console.log('⭐ 즐겨찾기 추가:', (newRecord as any)?.bill_id)
           // 즐겨찾기 캐시 무효화 (다음 로드시 새로고침)
           await favoritesCache.invalidateUserCache(userId)
           break
           
         case 'DELETE':
-          console.log('💔 즐겨찾기 제거:', oldRecord.bill_id)
+          console.log('💔 즐겨찾기 제거:', (oldRecord as any)?.bill_id)
           await favoritesCache.invalidateUserCache(userId)
           break
       }
