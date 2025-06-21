@@ -7,6 +7,7 @@ import { VoteButtons } from '@/components/bill/vote-buttons'
 import { VoteStats } from '@/components/bill/vote-stats'
 import { formatDateUTC } from '@/lib/utils'
 import { useBillSync } from '@/hooks/use-bill-sync'
+import { useFloatingWindow } from '@/hooks/use-floating-window'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -70,6 +71,7 @@ export function BillCard({
   extraDateInfo
 }: BillCardProps) {
   const router = useRouter()
+  const { openBillDetail } = useFloatingWindow()
 
   const highlightSearchTerm = (text: string | null, searchTerm: string) => {
     if (!text || !searchTerm) return text
@@ -145,7 +147,8 @@ export function BillCard({
   }
 
   const handleClick = () => {
-    router.push(`/bill/${bill.bill_id}`)
+    // 플로팅 창으로 열기
+    openBillDetail(bill.bill_id, bill.bill_name || `의안 ${bill.bill_no || bill.bill_id}`)
   }
 
   return (
