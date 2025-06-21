@@ -1,6 +1,7 @@
 import { billCache } from './bill-cache'
 import { favoritesCache } from './favorites-cache'
 import { createClient } from '@/lib/supabase/client'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 class CacheSyncManager {
   private supabase = createClient()
@@ -17,7 +18,7 @@ class CacheSyncManager {
       .channel('bills-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'bills' },
-        (payload) => {
+        (payload: RealtimePostgresChangesPayload<any>) => {
           console.log('📊 법안 데이터 변경 감지:', payload.eventType)
           this.handleBillChange(payload)
         }
@@ -29,7 +30,7 @@ class CacheSyncManager {
       .channel('favorites-changes')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'favorites' },
-        (payload) => {
+        (payload: RealtimePostgresChangesPayload<any>) => {
           console.log('⭐ 즐겨찾기 변경 감지:', payload.eventType)
           this.handleFavoriteChange(payload)
         }
@@ -41,7 +42,7 @@ class CacheSyncManager {
   }
 
   // 법안 데이터 변경 처리
-  private async handleBillChange(payload: any) {
+  private async handleBillChange(payload: RealtimePostgresChangesPayload<any>) {
     try {
       const { eventType, new: newRecord, old: oldRecord } = payload
 
@@ -67,7 +68,7 @@ class CacheSyncManager {
   }
 
   // 즐겨찾기 변경 처리
-  private async handleFavoriteChange(payload: any) {
+  private async handleFavoriteChange(payload: RealtimePostgresChangesPayload<any>) {
     try {
       const { eventType, new: newRecord, old: oldRecord } = payload
       const userId = newRecord?.user_id || oldRecord?.user_id
