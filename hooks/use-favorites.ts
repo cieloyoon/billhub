@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { favoritesCache } from '@/lib/favorites-cache'
 import { billCache } from '@/lib/bill-cache'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 export function useFavorites() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
@@ -110,7 +111,7 @@ export function useFavorites() {
 
   // 사용자 상태 변경 감지
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       setUser(session?.user || null)
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         loadFavorites()
