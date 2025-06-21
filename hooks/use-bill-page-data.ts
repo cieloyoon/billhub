@@ -44,6 +44,19 @@ export function useBillPageData() {
   const [loadingProgress, setLoadingProgress] = useState(0)
   const [cacheHit, setCacheHit] = useState(false)
   
+  // 각 탭별 개수 state 추가
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    pending: 0,
+    passed: 0,
+    rejected: 0,
+    recent: 0,
+    recentProposed: 0,
+    recentUpdated: 0,
+    recentProcessed: 0
+  })
+  const [currentFilteredCount, setCurrentFilteredCount] = useState(0)
+  
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const backgroundLoadingRef = useRef(false)
@@ -423,6 +436,9 @@ export function useBillPageData() {
         setDataLoaded(true)
         setLoading(false)
         
+        // 탭별 개수 계산
+        calculateTabCounts(cachedBills)
+        
         // 최근 탭 데이터 생성
         await setupRecentBills(cachedBills)
         
@@ -444,6 +460,9 @@ export function useBillPageData() {
         setDataLoaded(true)
         setLoading(false)
         
+        // 탭별 개수 계산
+        calculateTabCounts(initialBills)
+        
         // 화면에 즉시 표시
         console.log('⚡ 초기 데이터로 화면 표시 시작')
         
@@ -460,6 +479,8 @@ export function useBillPageData() {
           loadRemainingBills(initialBills).then(allBills => {
             if (allBills && allBills.length > initialBills.length) {
               setAllBills(allBills)
+              // 탭별 개수 재계산
+              calculateTabCounts(allBills)
               // 업데이트된 데이터로 최근 탭 재생성
               setupRecentBills(allBills)
               console.log('🔄 백그라운드 로딩으로 전체 데이터 업데이트됨')
@@ -492,11 +513,18 @@ export function useBillPageData() {
       const recentResponse = await fetch('/api/recent-bills')
       if (recentResponse.ok) {
         const recentData = await recentResponse.json()
+        const recentUpdated = recentData.recentUpdated || []
         setRecentBills({
           recentProposed,
           recentProcessed,
-          recentUpdated: recentData.recentUpdated || []
+          recentUpdated
         })
+        
+        // recentUpdated 개수 업데이트
+        setTabCounts(prev => ({
+          ...prev,
+          recentUpdated: recentUpdated.length
+        }))
       } else {
         setRecentBills({
           recentProposed,
@@ -512,6 +540,47 @@ export function useBillPageData() {
         recentUpdated: []
       })
     }
+  }, [])
+
+  // 각 탭별 개수 계산 함수 추가
+  const calculateTabCounts = useCallback((bills: Bill[]) => {
+    const all = bills.length
+    const pending = bills.filter(bill => bill.pass_gubn === '계류의안').length
+    const passed = bills.filter(bill => 
+      ['원안가결', '수정가결', '대안반영폐기', '수정안반영폐기'].includes(bill.general_result || '') &&
+      !['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+    ).length
+    const rejected = bills.filter(bill => 
+      ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
+      ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+    ).length
+    
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const recent = bills.filter(bill => 
+      bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
+    ).length
+    
+    const oneWeekAgo = new Date()
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+    const recentProposed = bills.filter(bill => 
+      bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
+    ).length
+    
+    const recentProcessed = bills.filter(bill => 
+      bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
+    ).length
+    
+    setTabCounts({
+      all,
+      pending,
+      passed,
+      rejected,
+      recent,
+      recentProposed,
+      recentUpdated: 0, // API에서 가져올 예정
+      recentProcessed
+    })
   }, [])
 
   // 클라이언트 사이드 필터링 및 표시
@@ -585,6 +654,7 @@ export function useBillPageData() {
     filtered = sortBills(filtered, activeCategory)
     
     setFilteredBills(filtered)
+    setCurrentFilteredCount(filtered.length)
     
     // 페이지네이션 적용
     const startIndex = 0
@@ -675,6 +745,10 @@ export function useBillPageData() {
     loadingProgress,
     cacheHit,
     loadMoreRef,
+    
+    // 각 탭별 개수 state 추가
+    tabCounts,
+    currentFilteredCount,
     
     // 액션들
     setSearchTerm,

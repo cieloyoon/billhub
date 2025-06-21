@@ -6,6 +6,13 @@ interface BillCategoryTabsProps {
   activeCategory: string
   onCategoryChange: (category: string) => void
   dataLoaded: boolean
+  tabCounts: {
+    all: number
+    pending: number
+    passed: number
+    rejected: number
+    recent: number
+  }
 }
 
 // 카테고리 정의
@@ -20,8 +27,20 @@ const CATEGORIES = [
 export function BillCategoryTabs({ 
   activeCategory, 
   onCategoryChange, 
-  dataLoaded 
+  dataLoaded, 
+  tabCounts 
 }: BillCategoryTabsProps) {
+  const getCategoryCount = (categoryId: string) => {
+    switch (categoryId) {
+      case 'all': return tabCounts.all
+      case 'pending': return tabCounts.pending
+      case 'passed': return tabCounts.passed
+      case 'rejected': return tabCounts.rejected
+      case 'recent': return tabCounts.recent
+      default: return 0
+    }
+  }
+
   return (
     <div className="bg-white border-b border-gray-200">
       <div className="container mx-auto px-4">

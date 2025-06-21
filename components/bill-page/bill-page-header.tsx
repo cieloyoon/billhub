@@ -13,6 +13,20 @@ interface BillPageHeaderProps {
   cacheHit?: boolean
   backgroundLoading?: boolean
   loadingProgress?: number
+  activeCategory: string
+  tabCounts: {
+    all: number
+    pending: number
+    passed: number
+    rejected: number
+    recent: number
+    recentProposed: number
+    recentUpdated: number
+    recentProcessed: number
+  }
+  currentFilteredCount: number
+  hasActiveFilters: boolean
+  recentSubTab?: string
 }
 
 export function BillPageHeader({ 
@@ -22,8 +36,40 @@ export function BillPageHeader({
   onViewModeChange,
   cacheHit,
   backgroundLoading,
-  loadingProgress 
+  loadingProgress,
+  activeCategory,
+  tabCounts,
+  currentFilteredCount,
+  hasActiveFilters,
+  recentSubTab
 }: BillPageHeaderProps) {
+  // 카테고리별 이름과 개수 가져오기
+  const getCategoryInfo = () => {
+    switch (activeCategory) {
+      case 'all':
+        return { name: '전체', count: hasActiveFilters ? currentFilteredCount : tabCounts.all }
+      case 'pending':
+        return { name: '계류중', count: hasActiveFilters ? currentFilteredCount : tabCounts.pending }
+      case 'passed':
+        return { name: '통과', count: hasActiveFilters ? currentFilteredCount : tabCounts.passed }
+      case 'rejected':
+        return { name: '불성립', count: hasActiveFilters ? currentFilteredCount : tabCounts.rejected }
+      case 'recent':
+        if (recentSubTab === 'proposed') {
+          return { name: '최근 접수', count: hasActiveFilters ? currentFilteredCount : tabCounts.recentProposed }
+        } else if (recentSubTab === 'updated') {
+          return { name: '최근 진행 단계 변경', count: hasActiveFilters ? currentFilteredCount : tabCounts.recentUpdated }
+        } else if (recentSubTab === 'processed') {
+          return { name: '최근 처리 완료', count: hasActiveFilters ? currentFilteredCount : tabCounts.recentProcessed }
+        }
+        return { name: '최근', count: hasActiveFilters ? currentFilteredCount : tabCounts.recent }
+      default:
+        return { name: '전체', count: hasActiveFilters ? currentFilteredCount : tabCounts.all }
+    }
+  }
+
+  const categoryInfo = getCategoryInfo()
+
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -40,7 +86,7 @@ export function BillPageHeader({
         ) : (
           <div className="flex items-center gap-2 mt-1">
             <p className="text-gray-600">
-              총 <span className="font-semibold text-gray-900">{totalCount.toLocaleString()}</span>개의 법안
+              총 <span className="font-semibold text-gray-900">{categoryInfo.count.toLocaleString()}</span>개의 <span className="font-semibold text-gray-900">{categoryInfo.name}</span> 법안
             </p>
             
 

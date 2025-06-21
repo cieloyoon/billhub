@@ -43,6 +43,10 @@ export default function BillPageClient() {
     cacheHit,
     loadMoreRef,
     
+    // 각 탭별 개수 state 추가
+    tabCounts,
+    currentFilteredCount,
+    
     // 액션들
     setSearchTerm,
     setActiveCategory,
@@ -107,6 +111,11 @@ export default function BillPageClient() {
               cacheHit={cacheHit}
               backgroundLoading={backgroundLoading}
               loadingProgress={loadingProgress}
+              activeCategory={activeCategory}
+              tabCounts={tabCounts}
+              currentFilteredCount={currentFilteredCount}
+              hasActiveFilters={activeFiltersCount > 0 || debouncedSearchTerm.length > 0}
+              recentSubTab={recentSubTab}
             />
 
             <BillSearchBar 
@@ -124,6 +133,7 @@ export default function BillPageClient() {
         activeCategory={activeCategory}
         onCategoryChange={setActiveCategory}
         dataLoaded={dataLoaded}
+        tabCounts={tabCounts}
       />
 
       {/* 필터 시트 */}
@@ -147,6 +157,11 @@ export default function BillPageClient() {
             viewMode={viewMode}
             isFavorited={isFavorited}
             onFavoriteToggle={handleFavoriteToggle}
+            tabCounts={{
+              recentProposed: tabCounts.recentProposed,
+              recentUpdated: tabCounts.recentUpdated,
+              recentProcessed: tabCounts.recentProcessed
+            }}
           />
         ) : (
           <BillGrid 

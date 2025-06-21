@@ -14,6 +14,11 @@ interface RecentBillsTabsProps {
   viewMode: 'grid' | 'list'
   isFavorited: (billId: string) => boolean
   onFavoriteToggle: (billId: string, isFav: boolean) => void
+  tabCounts: {
+    recentProposed: number
+    recentUpdated: number
+    recentProcessed: number
+  }
 }
 
 export function RecentBillsTabs({
@@ -23,7 +28,8 @@ export function RecentBillsTabs({
   loading,
   viewMode,
   isFavorited,
-  onFavoriteToggle
+  onFavoriteToggle,
+  tabCounts
 }: RecentBillsTabsProps) {
   if (loading) {
     return (
