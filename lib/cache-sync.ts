@@ -260,7 +260,7 @@ class CacheSyncManager {
           cached: billsCount > 0,
           count: billsCount,
           lastUpdated: billMeta?.lastUpdated,
-          size: billMeta?.totalSize
+          size: billMeta?.totalCount
         },
         syncActive: this.syncInterval !== null
       }
