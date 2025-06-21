@@ -131,6 +131,9 @@ export function useBillDetailApi() {
       setLoading(true)
       setError(null)
 
+      // 최소 로딩 시간 보장 (UI 확인을 위해)
+      const startTime = Date.now()
+      
       // 의안 정보 가져오기
       const { data, error } = await supabase
         .from('bills')
@@ -143,6 +146,13 @@ export function useBillDetailApi() {
       }
 
       setBill(data)
+
+      // 최소 800ms 로딩 시간 보장
+      const elapsedTime = Date.now() - startTime
+      const minLoadingTime = 800
+      if (elapsedTime < minLoadingTime) {
+        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime))
+      }
 
       // 위원회심사정보 API 호출
       if (data?.bill_id) {

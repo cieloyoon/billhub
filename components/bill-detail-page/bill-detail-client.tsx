@@ -36,6 +36,7 @@ export default function BillDetailClient({ billId }: BillDetailClientProps) {
           isFavorited={isFavorited}
           toggleFavorite={toggleFavorite}
           onBack={handleBack}
+          loading={loading}
         />
 
         <BillDetailContent

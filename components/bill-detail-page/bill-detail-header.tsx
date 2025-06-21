@@ -2,6 +2,7 @@
 
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FavoriteButton } from '@/components/bill/favorite-button'
 import { VoteButtons } from '@/components/bill/vote-buttons'
 import { VoteStats } from '@/components/bill/vote-stats'
@@ -14,6 +15,7 @@ interface BillDetailHeaderProps {
   toggleFavorite: (billId: string, isFav: boolean) => void
   onBack: () => void
   showOpenInNewTab?: boolean
+  loading?: boolean
 }
 
 export default function BillDetailHeader({ 
@@ -21,7 +23,8 @@ export default function BillDetailHeader({
   isFavorited, 
   toggleFavorite, 
   onBack,
-  showOpenInNewTab = false
+  showOpenInNewTab = false,
+  loading = false
 }: BillDetailHeaderProps) {
   return (
     <div className="mb-6">
@@ -57,7 +60,16 @@ export default function BillDetailHeader({
           <p className="text-xs sm:text-sm text-gray-600">법안 진행 과정 확인</p>
         </div>
         
-        {bill && (
+        {loading || !bill ? (
+          <div className="flex flex-col items-end gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+            </div>
+            <Skeleton className="h-4 w-20" />
+          </div>
+        ) : (
           <div className="flex flex-col items-end gap-3 flex-shrink-0">
             <div className="flex items-center gap-2 sm:gap-3">
               <VoteButtons billId={bill.bill_id} />
