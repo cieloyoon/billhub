@@ -64,6 +64,16 @@ export function useBillPageData() {
   
   const itemsPerPage = 12
 
+  // allBills에서 최근 법안 데이터 실시간 계산 + 진행 단계 변경은 별도 API 호출
+  const [recentUpdatedData, setRecentUpdatedData] = useState<Array<{
+    bill_id: string
+    tracked_at: string
+    old_value: string
+    new_value: string
+    bills: Bill
+  }>>([])
+  const [loadingRecentUpdated, setLoadingRecentUpdated] = useState(false)
+
   // 컴포넌트 마운트 확인
   useEffect(() => {
     setMounted(true)
@@ -647,13 +657,65 @@ export function useBillPageData() {
     }
   }, [supabase, loadFromCache, loadInitialBills, loadRemainingBills])
 
-  // allBills에서 최근 법안 데이터 실시간 계산
+  // 최근 진행 단계 변경 데이터 로드
+  const loadRecentUpdated = useCallback(async () => {
+    if (!supabase) return
+
+    setLoadingRecentUpdated(true)
+    try {
+      const oneWeekAgo = new Date()
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+
+      const { data, error } = await supabase
+        .from('bill_history')
+        .select(`
+          bill_id, 
+          bill_no, 
+          bill_name, 
+          tracked_at,
+          old_value,
+          new_value,
+          bills!inner(*)
+        `)
+        .eq('change_type', 'stage_changed')
+        .gte('tracked_at', oneWeekAgo.toISOString())
+        .order('tracked_at', { ascending: false })
+        .order('bill_no', { ascending: false })
+
+      if (error) throw error
+
+      // 타입 안전하게 변환
+      const typedData = (data || []).map(item => ({
+        bill_id: item.bill_id,
+        tracked_at: item.tracked_at,
+        old_value: item.old_value,
+        new_value: item.new_value,
+        bills: Array.isArray(item.bills) ? item.bills[0] : item.bills
+      }))
+
+      setRecentUpdatedData(typedData)
+      console.log(`🔄 최근 진행 단계 변경 의안 로드 완료: ${typedData.length}개`)
+    } catch (error) {
+      console.error('최근 진행 단계 변경 데이터 로드 실패:', error)
+      setRecentUpdatedData([])
+    } finally {
+      setLoadingRecentUpdated(false)
+    }
+  }, [supabase])
+
+  // 컴포넌트 마운트시 최근 진행 단계 변경 데이터 로드
+  useEffect(() => {
+    if (supabase && mounted) {
+      loadRecentUpdated()
+    }
+  }, [supabase, mounted, loadRecentUpdated])
+
   const getRecentBills = useCallback((): RecentBillsData => {
     if (!allBills.length) {
       return {
         recentProposed: [],
         recentProcessed: [],
-        recentUpdated: []
+        recentUpdated: recentUpdatedData
       }
     }
 
@@ -668,13 +730,13 @@ export function useBillPageData() {
       bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
     ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
     
-    // recentUpdated는 별도 API가 필요하므로 빈 배열로 처리 (필요시 추가)
+    // recentUpdated는 별도 API에서 가져온 데이터 사용
     return {
       recentProposed,
       recentProcessed,
-      recentUpdated: []
+      recentUpdated: recentUpdatedData
     }
-  }, [allBills])
+  }, [allBills, recentUpdatedData])
 
   // 실시간으로 계산된 최근 법안 데이터
   const recentBills = getRecentBills()
@@ -963,13 +1025,17 @@ export function useBillPageData() {
       setTotalCount(0)
       setCacheHit(false)
       setError(null)
+      
+      // 최근 진행 단계 변경 데이터도 새로고침
+      await loadRecentUpdated()
+      
       setIsRefreshing(false)
       
     } catch (error) {
       console.error('수동 새로고침 실패:', error)
       setIsRefreshing(false)
     }
-  }, [isRefreshing])
+  }, [isRefreshing, loadRecentUpdated])
 
   return {
     // 상태들
@@ -982,10 +1048,10 @@ export function useBillPageData() {
     mounted,
     searchTerm,
     debouncedSearchTerm,
-    activeCategory,
-    recentSubTab,
-    recentBills,
-    viewMode,
+          activeCategory,
+      recentSubTab,
+      recentBills,
+      viewMode,
     filters,
     currentPage,
     hasMore,
