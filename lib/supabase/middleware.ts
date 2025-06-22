@@ -45,14 +45,16 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // 인증이 필요한 페이지들 체크
+  const protectedPaths = ['/bill/mybill', '/notifications'];
+  const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path));
+
   if (
-    request.nextUrl.pathname !== "/" &&
     !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/bill")
+    isProtectedPath
   ) {
-    // no user, potentially respond by redirecting the user to the login page
+    // 인증이 필요한 페이지에 비로그인으로 접근시 로그인 페이지로 리다이렉트
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);

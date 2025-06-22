@@ -2,7 +2,7 @@
 
 import BillDetailHeader from '@/components/bill-detail-page/bill-detail-header'
 import { BillDetailContent } from '@/components/bill-detail-page/bill-detail-content'
-import { FloatingLoadingState } from '@/components/bill-detail-page/bill-detail-states'
+import { LoadingCompact } from '@/components/ui/loading'
 import { useBillDetailPage } from '@/hooks/use-bill-detail-page'
 
 interface BillDetailFloatingProps {
@@ -36,20 +36,8 @@ export default function BillDetailFloating({ billId, onClose }: BillDetailFloati
   // 로딩 중일 때는 전체 로딩 상태 표시
   if (loading) {
     return (
-      <div className="bg-background h-full flex flex-col">
-        <div className="px-4 py-4 flex-shrink-0">
-          <BillDetailHeader 
-            bill={null}
-            isFavorited={() => false}
-            toggleFavorite={() => {}}
-            onBack={handleBack}
-            showOpenInNewTab={false}
-            loading={true}
-          />
-        </div>
-        <div className="flex-1 overflow-auto px-4 pb-4">
-          <FloatingLoadingState />
-        </div>
+      <div className="bg-background h-full flex items-center justify-center">
+        <LoadingCompact message="의안 상세 정보 불러오는 중..." />
       </div>
     )
   }

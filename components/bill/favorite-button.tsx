@@ -30,7 +30,7 @@ export function FavoriteButton({ billId, initialIsFavorited = false, onToggle }:
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
-        alert('로그인이 필요합니다.')
+        window.location.href = '/auth/login'
         return
       }
 

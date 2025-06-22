@@ -57,9 +57,9 @@ export function RecentBillsTabs({
     <div className="bg-white rounded-lg border">
       <Tabs value={recentSubTab} onValueChange={onRecentSubTabChange}>
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="proposed">최근 접수 법안</TabsTrigger>
-          <TabsTrigger value="updated">최근 진행 단계 변경 법안</TabsTrigger>
-          <TabsTrigger value="processed">최근 처리 완료 법안</TabsTrigger>
+          <TabsTrigger value="proposed">최근 접수 의안</TabsTrigger>
+          <TabsTrigger value="updated">최근 진행 단계 변경 의안</TabsTrigger>
+          <TabsTrigger value="processed">최근 처리 완료 의안</TabsTrigger>
         </TabsList>
         
         <div className="p-6">
@@ -68,8 +68,8 @@ export function RecentBillsTabs({
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-2xl">📥</div>
                 <div>
-                  <h3 className="text-lg font-semibold">최근 접수된 법안</h3>
-                  <p className="text-sm text-gray-600">최근 일주일간 새로 접수된 법안들입니다</p>
+                              <h3 className="text-lg font-semibold">최근 접수된 의안</h3>
+            <p className="text-sm text-gray-600">최근 일주일간 새로 접수된 의안들입니다</p>
                 </div>
               </div>
               <div className={`grid gap-6 ${
@@ -79,7 +79,7 @@ export function RecentBillsTabs({
               }`}>
                 {recentBills.recentProposed.length === 0 ? (
                   <div className="col-span-full text-center py-8 text-gray-500">
-                    최근 접수된 법안이 없습니다
+                    최근 접수된 의안이 없습니다
                   </div>
                 ) : (
                   recentBills.recentProposed.map((bill: Bill) => (
@@ -101,8 +101,8 @@ export function RecentBillsTabs({
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-2xl">🔄</div>
                 <div>
-                  <h3 className="text-lg font-semibold">최근 진행 단계 변경된 법안</h3>
-                  <p className="text-sm text-gray-600">최근 일주일간 진행 단계가 변경된 법안들입니다</p>
+                              <h3 className="text-lg font-semibold">최근 진행 단계 변경된 의안</h3>
+            <p className="text-sm text-gray-600">최근 일주일간 진행 단계가 변경된 의안들입니다</p>
                 </div>
               </div>
               <div className={`grid gap-6 ${
@@ -112,7 +112,7 @@ export function RecentBillsTabs({
               }`}>
                 {recentBills.recentUpdated.length === 0 ? (
                   <div className="col-span-full text-center py-8 text-gray-500">
-                    최근 진행 단계가 변경된 법안이 없습니다
+                    최근 진행 단계가 변경된 의안이 없습니다
                   </div>
                 ) : (
                   recentBills.recentUpdated.map((history: any) => {
@@ -140,8 +140,8 @@ export function RecentBillsTabs({
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-2xl">✅</div>
                 <div>
-                  <h3 className="text-lg font-semibold">최근 처리 완료된 법안</h3>
-                  <p className="text-sm text-gray-600">최근 일주일간 처리가 완료된 법안들입니다</p>
+                              <h3 className="text-lg font-semibold">최근 처리 완료된 의안</h3>
+            <p className="text-sm text-gray-600">최근 일주일간 처리가 완료된 의안들입니다</p>
                 </div>
               </div>
               <div className={`grid gap-6 ${
@@ -151,7 +151,7 @@ export function RecentBillsTabs({
               }`}>
                 {recentBills.recentProcessed.length === 0 ? (
                   <div className="col-span-full text-center py-8 text-gray-500">
-                    최근 처리 완료된 법안이 없습니다
+                    최근 처리 완료된 의안이 없습니다
                   </div>
                 ) : (
                   recentBills.recentProcessed.map((bill: Bill) => (

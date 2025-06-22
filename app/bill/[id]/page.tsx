@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useFloatingWindow } from '@/hooks/use-floating-window'
+import { Loading } from '@/components/ui/loading'
 import BillDetailClient from '@/components/bill-detail-page/bill-detail-client'
 
 // 동적 렌더링 강제
@@ -38,14 +39,7 @@ export default function BillDetailPage({ params }: BillDetailPageProps) {
     return <BillDetailPageContent params={params} />
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="mt-2 text-sm text-muted-foreground">의안 정보를 불러오는 중...</p>
-      </div>
-    </div>
-  )
+  return <Loading message="의안 상세 정보 불러오는 중..." />
 }
 
 // 새 탭에서 보여줄 일반 페이지 컴포넌트
@@ -62,14 +56,7 @@ function BillDetailPageContent({ params }: BillDetailPageProps) {
   }, [params])
 
   if (!billId) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-sm text-muted-foreground">의안 정보를 불러오는 중...</p>
-        </div>
-      </div>
-    )
+    return <Loading message="의안 상세 정보 불러오는 중..." />
   }
 
   return <BillDetailClient billId={billId} />

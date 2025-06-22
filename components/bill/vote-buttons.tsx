@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import { useBillSync } from '@/hooks/use-bill-sync'
 
 interface VoteButtonsProps {
@@ -20,7 +19,6 @@ interface Vote {
 export function VoteButtons({ billId, className = '', onVoteChange }: VoteButtonsProps) {
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
-  const router = useRouter()
   const { getVote, setVote } = useBillSync()
   
   const currentVote = getVote(billId)
@@ -90,7 +88,7 @@ export function VoteButtons({ billId, className = '', onVoteChange }: VoteButton
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
-        router.push('/auth/login')
+        window.location.href = '/auth/login'
         return
       }
 

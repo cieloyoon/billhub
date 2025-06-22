@@ -5,6 +5,7 @@ import { Loader2, AlertCircle, Zap, Database, LogIn, Heart } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Loading } from '@/components/ui/loading'
 import { MyBillPageHeader } from '@/components/bill-page/mybill-page-header'
 import { BillGrid } from '@/components/bill-page/bill-grid'
 import { useFavorites } from '@/hooks/use-favorites'
@@ -47,62 +48,10 @@ export default function MyBillPage() {
   })).filter(bill => bill.bill_id) // null 값 제거
 
   if (!mounted || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-            <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">관심 법안 목록 로딩 중</h2>
-          <p className="text-gray-600">잠시만 기다려주세요...</p>
-        </div>
-      </div>
-    )
+    return <Loading message="관심 의안 목록 불러오는 중..." />
   }
 
   if (error) {
-    // 로그인 필요 에러인 경우 특별한 UI 표시
-    if (error.includes('로그인이 필요합니다')) {
-      return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="container mx-auto px-4 py-8">
-            <Card className="max-w-md mx-auto">
-              <CardHeader className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4 mx-auto">
-                  <Heart className="h-8 w-8 text-blue-600" />
-                </div>
-                <CardTitle className="text-xl text-gray-900">관심 법안을 확인하려면</CardTitle>
-                <p className="text-gray-600 mt-2">로그인이 필요해요</p>
-              </CardHeader>
-              <CardContent className="text-center">
-                <p className="text-gray-600 mb-6">
-                  로그인하시면 관심 있는 법안을 저장하고<br />
-                  언제든지 빠르게 확인할 수 있어요
-                </p>
-                <div className="space-y-3">
-                  <Button 
-                    onClick={() => window.location.href = '/auth/login'} 
-                    className="w-full"
-                  >
-                    <LogIn className="h-4 w-4 mr-2" />
-                    로그인하기
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => window.location.href = '/bill'} 
-                    className="w-full"
-                  >
-                    법안 목록 보기
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )
-    }
-
-    // 일반 에러인 경우
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="container mx-auto px-4 py-8">

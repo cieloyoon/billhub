@@ -70,7 +70,7 @@ export function BillDetailLoadingState() {
       <div className="flex items-center justify-center py-8">
         <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">의안 정보를 불러오는 중...</span>
+          <span className="text-sm">의안 상세 정보 불러오는 중...</span>
         </div>
       </div>
     </div>
@@ -174,7 +174,7 @@ export function ProgressLoadingState({
           <div className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              <span className="text-lg font-medium">의안 정보 로딩 중</span>
+              <span className="text-lg font-medium">의안 상세 정보 로딩 중</span>
             </div>
             {message && (
               <p className="text-sm text-muted-foreground">{message}</p>
@@ -228,69 +228,10 @@ export function ProgressLoadingState({
 // 플로팅 창 전용 컴팩트 로딩 상태
 export function FloatingLoadingState() {
   return (
-    <div className="space-y-4 animate-pulse">
-      {/* 상단 로딩 바 */}
-      <div className="w-full bg-gradient-to-r from-blue-200 via-blue-300 to-blue-200 h-1 rounded-full">
-        <div className="bg-blue-500 h-1 rounded-full animate-pulse w-1/3"></div>
-      </div>
-      
-      {/* 컴팩트한 기본 정보 스켈레톤 */}
-      <Card className="border-dashed border-2 border-blue-200">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-            <span className="text-sm text-blue-600 font-medium">의안 기본정보 로딩 중</span>
-          </div>
-          <Skeleton className="h-6 w-3/4 bg-blue-100" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-16 bg-blue-100" />
-            <Skeleton className="h-4 w-12 bg-blue-100" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-3">
-            <Skeleton className="h-3 w-full bg-blue-100" />
-            <Skeleton className="h-3 w-5/6 bg-blue-100" />
-            <Skeleton className="h-3 w-4/6 bg-blue-100" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 컴팩트한 탭 스켈레톤 */}
-      <Card className="border-dashed border-2 border-green-200">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <RefreshCw className="w-4 h-4 animate-spin text-green-500" />
-            <span className="text-sm text-green-600 font-medium">상세정보 준비 중</span>
-          </div>
-          <div className="flex space-x-1 rounded-lg bg-muted p-1">
-            <Skeleton className="h-8 w-24 bg-green-100" />
-            <Skeleton className="h-8 w-24 bg-green-100" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <Skeleton className="h-20 w-full bg-green-100" />
-            <div className="space-y-2">
-              <Skeleton className="h-3 w-full bg-green-100" />
-              <Skeleton className="h-3 w-4/5 bg-green-100" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 중앙 로딩 인디케이터 */}
-      <div className="flex items-center justify-center py-6 bg-gradient-to-r from-transparent via-blue-50 to-transparent rounded-lg">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="relative">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            <div className="absolute inset-0 w-8 h-8 border-2 border-blue-200 rounded-full animate-ping opacity-20"></div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-sm font-medium text-blue-700">의안 정보 로딩 중...</span>
-            <span className="text-xs text-blue-500">잠시만 기다려주세요</span>
-          </div>
-        </div>
+    <div className="flex items-center justify-center py-8">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-2 text-sm text-muted-foreground">의안 상세 정보 불러오는 중...</p>
       </div>
     </div>
   )

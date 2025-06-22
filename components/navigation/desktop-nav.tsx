@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { href: "/bill", label: "법안" },
-  { href: "/bill/mybill", label: "관심 법안" },
+  { href: "/bill", label: "의안" },
+  { href: "/bill/mybill", label: "관심 의안" },
   { href: "/notifications", label: "알림" },
 ]
 

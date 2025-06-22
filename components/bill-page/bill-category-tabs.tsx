@@ -17,11 +17,11 @@ interface BillCategoryTabsProps {
 
 // 카테고리 정의
 const CATEGORIES = [
-  { id: 'all', name: '전체', description: '모든 법안', icon: '📋' },
-  { id: 'pending', name: '계류중', description: '심사중인 법안', icon: '⏳' },
-  { id: 'passed', name: '통과', description: '가결된 법안', icon: '✅' },
-  { id: 'rejected', name: '불성립', description: '불성립된 법안', icon: '❌' },
-  { id: 'recent', name: '최근', description: '최근 30일 법안', icon: '🆕' },
+  { id: 'all', name: '전체', description: '모든 의안', icon: '📋' },
+  { id: 'pending', name: '계류중', description: '심사중인 의안', icon: '⏳' },
+  { id: 'passed', name: '통과', description: '가결된 의안', icon: '✅' },
+  { id: 'rejected', name: '불성립', description: '불성립된 의안', icon: '❌' },
+  { id: 'recent', name: '최근', description: '최근 30일 의안', icon: '🆕' },
 ]
 
 export function BillCategoryTabs({ 

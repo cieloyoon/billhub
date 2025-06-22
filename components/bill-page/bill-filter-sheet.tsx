@@ -78,7 +78,7 @@ export function BillFilterSheet({
             <div>
               <SheetTitle className="text-xl">고급 필터</SheetTitle>
               <SheetDescription className="text-sm text-gray-500">
-                원하는 조건으로 법안을 정확하게 필터링하세요
+                원하는 조건으로 의안을 정확하게 필터링하세요
               </SheetDescription>
             </div>
           </div>

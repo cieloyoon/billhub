@@ -75,7 +75,7 @@ export default function BillBasicInfo({ bill }: BillBasicInfoProps) {
           <div className="flex items-center gap-3">
             <FileText className="w-5 h-5 text-blue-500" />
             <div>
-              <p className="text-sm text-gray-500">법안번호</p>
+              <p className="text-sm text-gray-500">의안번호</p>
               <p className="font-medium">{bill.bill_no || '-'}</p>
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function BillBasicInfo({ bill }: BillBasicInfoProps) {
         {/* 요약 */}
         {bill.summary && (
           <div>
-            <h3 className="text-lg font-semibold mb-4">법안 요약</h3>
+            <h3 className="text-lg font-semibold mb-4">의안 요약</h3>
             <div className="bg-gray-50 rounded-lg p-4">
               <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{bill.summary}</p>
             </div>

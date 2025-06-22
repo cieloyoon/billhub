@@ -6,6 +6,7 @@ import { useFavorites } from '@/hooks/use-favorites'
 import { useBillPageData } from '@/hooks/use-bill-page-data'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Loading } from '@/components/ui/loading'
 
 // 분리된 컴포넌트들
 import { BillPageHeader } from '@/components/bill-page/bill-page-header'
@@ -64,17 +65,7 @@ export default function BillPageClient() {
   }
 
   if (!mounted || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-            <Loader2 className="h-8 w-8 text-gray-600 animate-spin" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">법안 데이터 로딩 중</h2>
-          <p className="text-gray-600">잠시만 기다려주세요...</p>
-        </div>
-      </div>
-    )
+    return <Loading message="의안 목록 불러오는 중..." />
   }
 
   if (error) {

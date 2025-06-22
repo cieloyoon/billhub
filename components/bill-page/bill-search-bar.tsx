@@ -24,7 +24,7 @@ export function BillSearchBar({
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           type="text"
-          placeholder="법안명, 법안번호, 내용으로 검색..."
+          placeholder="의안명, 의안번호, 내용으로 검색..."
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
           className="pl-10 pr-4"

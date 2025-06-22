@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/", label: "홈", icon: Home },
-  { href: "/bill", label: "법안", icon: FileText },
-  { href: "/bill/mybill", label: "관심 법안", icon: Heart },
+  { href: "/bill", label: "의안", icon: FileText },
+  { href: "/bill/mybill", label: "관심 의안", icon: Heart },
   { href: "/notifications", label: "알림", icon: Bell },
 ]
 

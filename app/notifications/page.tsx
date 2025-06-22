@@ -11,7 +11,7 @@ export default function NotificationsPage() {
           <div className="flex flex-col gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">알림 센터</h1>
-              <p className="text-gray-600 mt-1">법안 변경 사항을 확인하세요</p>
+              <p className="text-gray-600 mt-1">의안 변경 사항을 확인하세요</p>
             </div>
           </div>
         </div>

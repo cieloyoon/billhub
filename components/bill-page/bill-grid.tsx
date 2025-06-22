@@ -96,7 +96,7 @@ export function BillGrid({
           {loadingMore && (
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-gray-600">더 많은 법안을 불러오는 중...</span>
+                              <span className="text-gray-600">더 많은 의안을 불러오는 중...</span>
             </div>
           )}
         </div>
@@ -104,7 +104,7 @@ export function BillGrid({
 
       {!hasMore && bills.length > 0 && (
         <div className="text-center py-8">
-          <p className="text-gray-600">모든 법안을 불러왔습니다</p>
+                        <p className="text-gray-600">모든 의안을 불러왔습니다</p>
         </div>
       )}
     </>

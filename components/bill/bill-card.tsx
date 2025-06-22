@@ -236,7 +236,7 @@ export function BillCard({
           </CardDescription>
         ) : (
           <div className="text-sm text-muted-foreground italic">
-            법안 요약 정보가 없습니다.
+            의안 요약 정보가 없습니다.
           </div>
         )}
       </CardContent>
@@ -247,7 +247,7 @@ export function BillCard({
           <div className="text-right">
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex items-center justify-end gap-2">
-                <span>발의: {formatDateUTC(bill.propose_dt)}</span>
+                <span>제안: {formatDateUTC(bill.propose_dt)}</span>
                 <Calendar className="h-3 w-3 flex-shrink-0" />
               </div>
               {bill.proc_dt && (

@@ -68,7 +68,7 @@ export function BillPageHeader({
     <div className="flex items-center justify-between">
       <div>
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">제 22대 국회 법안</h1>
+          <h1 className="text-2xl font-bold text-gray-900">제 22대 국회 의안</h1>
           
 
         </div>
@@ -80,7 +80,7 @@ export function BillPageHeader({
         ) : (
           <div className="flex items-center gap-2 mt-1">
             <p className="text-gray-600">
-              총 <span className="font-semibold text-gray-900">{categoryInfo.count.toLocaleString()}</span>개의 <span className="font-semibold text-gray-900">{categoryInfo.name}</span> 법안
+              총 <span className="font-semibold text-gray-900">{categoryInfo.count.toLocaleString()}</span>개의 <span className="font-semibold text-gray-900">{categoryInfo.name}</span> 의안
             </p>
             
 

@@ -1,11 +1,12 @@
 'use client'
 
-import { ArrowLeft, ExternalLink } from 'lucide-react'
+import { ArrowLeft, ExternalLink, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FavoriteButton } from '@/components/bill/favorite-button'
 import { VoteButtons } from '@/components/bill/vote-buttons'
 import { VoteStats } from '@/components/bill/vote-stats'
+import { useBillSync } from '@/hooks/use-bill-sync'
 
 import { Bill } from '@/types/bill'
 
@@ -16,6 +17,31 @@ interface BillDetailHeaderProps {
   onBack: () => void
   showOpenInNewTab?: boolean
   loading?: boolean
+}
+
+// 투표 상태에 따라 조건부로 통계를 보여주는 컴포넌트
+function VoteStatsConditional({ billId }: { billId: string }) {
+  const { getVote } = useBillSync()
+  const currentVote = getVote(billId)
+  
+  // 투표하지 않았으면 안내 문구 표시
+  if (!currentVote) {
+    return (
+      <div className="text-xs text-muted-foreground flex items-center gap-1 justify-end">
+        <TrendingUp className="h-3 w-3 flex-shrink-0" />
+        <span className="truncate">투표 후 결과 확인 가능</span>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="text-xs text-muted-foreground flex justify-end">
+      <VoteStats 
+        billId={billId} 
+        className="inline truncate" 
+      />
+    </div>
+  )
 }
 
 export default function BillDetailHeader({ 
@@ -57,7 +83,7 @@ export default function BillDetailHeader({
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">의안 상세정보</h1>
-          <p className="text-xs sm:text-sm text-gray-600">법안 진행 과정 확인</p>
+                      <p className="text-xs sm:text-sm text-gray-600">의안 진행 과정 확인</p>
         </div>
         
         {loading || !bill ? (
@@ -79,8 +105,8 @@ export default function BillDetailHeader({
                 onToggle={(isFav) => toggleFavorite(bill.bill_id, isFav)}
               />
             </div>
-            {/* 찬반 투표 통계 - 버튼 바로 아래 */}
-            <VoteStats billId={bill.bill_id} />
+            {/* 찬반 투표 통계 - 버튼 바로 아래 (투표 후에만 표시) */}
+            <VoteStatsConditional billId={bill.bill_id} />
           </div>
         )}
       </div>

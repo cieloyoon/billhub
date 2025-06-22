@@ -60,7 +60,7 @@ export default function HomePage() {
               <ul className="text-xs text-muted-foreground space-y-1 md:text-sm">
                 <li>• 키워드, 발의자, 위원회별 검색</li>
                 <li>• 진행 상황 실시간 추적</li>
-                <li>• 관련 법안 자동 연결</li>
+                <li>• 관련 의안 자동 연결</li>
               </ul>
             </CardContent>
           </Card>
@@ -96,7 +96,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent className="pt-0">
               <ul className="text-xs text-muted-foreground space-y-1 md:text-sm">
-                <li>• 법안 영향도 분석</li>
+                <li>• 의안 영향도 분석</li>
                 <li>• 이해관계자 분석</li>
                 <li>• 정치적 맥락 해석</li>
               </ul>

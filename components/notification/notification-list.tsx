@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Skeleton } from '@/components/ui/skeleton'
+import { LoadingCompact } from '@/components/ui/loading'
 import { Card } from '@/components/ui/card'
 import { Bell, BellRing, CheckCheck } from 'lucide-react'
 
@@ -128,28 +128,17 @@ export function NotificationList({ className = "" }: NotificationListProps) {
           <Card className="min-h-[400px]">
             <ScrollArea className="h-[calc(100vh-300px)]">
               {isLoading ? (
-                <div className="p-6 space-y-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="space-y-3 p-4 border rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <Skeleton className="w-8 h-8 rounded-full" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-4 w-3/4" />
-                          <Skeleton className="h-3 w-1/2" />
-                          <Skeleton className="h-3 w-2/3" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-center py-20 px-4 min-h-[300px]">
+                  <LoadingCompact message="알림 목록 불러오는 중..." />
                 </div>
               ) : notifications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="flex flex-col items-center justify-center py-20 px-4 min-h-[300px]">
                   <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                     <Bell className="w-8 h-8 text-gray-400" />
                   </div>
                   <h3 className="font-medium text-gray-900 mb-1">알림이 없습니다</h3>
                   <p className="text-sm text-gray-500 text-center">
-                    법안 구독을 설정하면 변경 사항을 알려드립니다.
+                    의안 구독을 설정하면 변경 사항을 알려드립니다.
                   </p>
                 </div>
               ) : (
@@ -173,22 +162,11 @@ export function NotificationList({ className = "" }: NotificationListProps) {
           <Card className="min-h-[400px]">
             <ScrollArea className="h-[calc(100vh-300px)]">
               {isLoading ? (
-                <div className="p-6 space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="space-y-3 p-4 border rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <Skeleton className="w-8 h-8 rounded-full" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-4 w-3/4" />
-                          <Skeleton className="h-3 w-1/2" />
-                          <Skeleton className="h-3 w-2/3" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-center py-20 px-4 min-h-[300px]">
+                  <LoadingCompact message="알림 목록 불러오는 중..." />
                 </div>
               ) : notifications.filter(n => !n.is_read).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="flex flex-col items-center justify-center py-20 px-4 min-h-[300px]">
                   <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
                     <CheckCheck className="w-8 h-8 text-green-600" />
                   </div>
