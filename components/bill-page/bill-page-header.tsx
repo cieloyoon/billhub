@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutGrid, List, Database, Zap, Download } from 'lucide-react'
+import { LayoutGrid, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -10,9 +10,6 @@ interface BillPageHeaderProps {
   dataLoaded: boolean
   viewMode: 'grid' | 'list'
   onViewModeChange: (mode: 'grid' | 'list') => void
-  cacheHit?: boolean
-  backgroundLoading?: boolean
-  loadingProgress?: number
   activeCategory: string
   tabCounts: {
     all: number
@@ -34,9 +31,6 @@ export function BillPageHeader({
   dataLoaded, 
   viewMode, 
   onViewModeChange,
-  cacheHit,
-  backgroundLoading,
-  loadingProgress,
   activeCategory,
   tabCounts,
   currentFilteredCount,

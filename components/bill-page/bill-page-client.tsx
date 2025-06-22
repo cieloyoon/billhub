@@ -14,7 +14,6 @@ import { BillFilterSheet } from '@/components/bill-page/bill-filter-sheet'
 import { BillCategoryTabs } from '@/components/bill-page/bill-category-tabs'
 import { BillGrid } from '@/components/bill-page/bill-grid'
 import { RecentBillsTabs } from '@/components/bill-page/recent-bills-tabs'
-import { CacheDebugPanel } from '@/components/bill-page/cache-debug-panel'
 
 export default function BillPageClient() {
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
@@ -42,6 +41,7 @@ export default function BillPageClient() {
     loadingProgress,
     cacheHit,
     loadMoreRef,
+    isRefreshing,
     
     // 각 탭별 개수 state 추가
     tabCounts,
@@ -54,6 +54,7 @@ export default function BillPageClient() {
     setViewMode,
     handleFilterChange,
     clearFilters,
+    handleManualRefresh,
     clearCache,
     getCacheStats,
   } = useBillPageData()
@@ -108,9 +109,6 @@ export default function BillPageClient() {
               dataLoaded={dataLoaded}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              cacheHit={cacheHit}
-              backgroundLoading={backgroundLoading}
-              loadingProgress={loadingProgress}
               activeCategory={activeCategory}
               tabCounts={tabCounts}
               currentFilteredCount={currentFilteredCount}
@@ -177,6 +175,8 @@ export default function BillPageClient() {
             loadMoreRef={loadMoreRef as React.RefObject<HTMLDivElement>}
           />
         )}
+        
+
       </div>
 
       

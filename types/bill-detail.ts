@@ -6,6 +6,8 @@ export interface BillDetailTabsProps {
   additionalInfo: AdditionalApiInfo
   commissionLoading: boolean
   additionalLoading: boolean
+  backgroundLoading?: boolean
+  loadingProgress?: number
 }
 
 export interface BillDetailContentProps {
@@ -15,6 +17,8 @@ export interface BillDetailContentProps {
   loading: boolean
   commissionLoading: boolean
   additionalLoading: boolean
+  backgroundLoading?: boolean
+  loadingProgress?: number
   error: string | null
   onBack: () => void
 } 

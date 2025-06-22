@@ -20,6 +20,8 @@ export function useBillDetailPage({ billId }: UseBillDetailPageProps) {
     loading,
     commissionLoading,
     additionalLoading,
+    backgroundLoading,
+    loadingProgress,
     error,
     fetchBillDetails
   } = useBillDetailApi()
@@ -40,6 +42,8 @@ export function useBillDetailPage({ billId }: UseBillDetailPageProps) {
     loading,
     commissionLoading,
     additionalLoading,
+    backgroundLoading,
+    loadingProgress,
     error,
     
     // 핸들러들

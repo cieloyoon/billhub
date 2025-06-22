@@ -19,6 +19,8 @@ export default function BillDetailFloating({ billId, onClose }: BillDetailFloati
     loading,
     commissionLoading,
     additionalLoading,
+    backgroundLoading,
+    loadingProgress,
     error,
     
     // 핸들러들
@@ -53,7 +55,19 @@ export default function BillDetailFloating({ billId, onClose }: BillDetailFloati
   }
 
   return (
-    <div className="bg-background h-full flex flex-col">
+    <div className="bg-background h-full flex flex-col relative">
+      {/* 플로팅 창용 백그라운드 로딩 상태 표시 */}
+      {backgroundLoading && (
+        <div className="absolute top-2 right-2 z-10 bg-white/95 backdrop-blur-sm border border-border/50 rounded-md px-2 py-1 shadow-sm">
+          <div className="flex items-center gap-1.5 text-xs">
+            <div className="animate-spin h-3 w-3 border border-primary border-r-transparent rounded-full"></div>
+            <span className="text-muted-foreground">
+              상세정보 {loadingProgress}%
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 py-4 flex-shrink-0">
         {/* 헤더를 더 컴팩트하게 */}
         <BillDetailHeader 
@@ -75,6 +89,8 @@ export default function BillDetailFloating({ billId, onClose }: BillDetailFloati
           loading={loading}
           commissionLoading={commissionLoading}
           additionalLoading={additionalLoading}
+          backgroundLoading={backgroundLoading}
+          loadingProgress={loadingProgress}
           error={error}
           onBack={handleBack}
         />

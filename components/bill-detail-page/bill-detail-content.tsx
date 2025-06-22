@@ -12,6 +12,8 @@ export function BillDetailContent({
   loading,
   commissionLoading,
   additionalLoading,
+  backgroundLoading,
+  loadingProgress,
   error,
   onBack
 }: BillDetailContentProps) {
@@ -36,6 +38,8 @@ export function BillDetailContent({
         additionalInfo={additionalInfo}
         commissionLoading={commissionLoading}
         additionalLoading={additionalLoading}
+        backgroundLoading={backgroundLoading}
+        loadingProgress={loadingProgress}
       />
     </div>
   )

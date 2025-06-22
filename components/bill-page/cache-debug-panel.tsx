@@ -1,180 +1,198 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Settings, Database, Trash2, RefreshCw, Info } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ChevronDown, RefreshCw, Database, Smartphone, Monitor } from 'lucide-react'
 
 interface CacheDebugPanelProps {
-  getCacheStats: () => Promise<{ size: number; lastUpdated: Date | null; totalCount: number }>
-  clearCache: () => Promise<void>
+  totalCount: number
+  displayedCount: number
+  cacheHit: boolean
+  backgroundLoading: boolean
+  loadingProgress: number
+  dataLoaded: boolean
+  onClearCache: () => void
+  onGetCacheStats: () => Promise<{
+    isAvailable: boolean
+    usedBytes: number
+    quota: number
+    cachedBillsCount: number
+    lastUpdated: string | null
+  }>
 }
 
-export function CacheDebugPanel({ getCacheStats, clearCache }: CacheDebugPanelProps) {
+export function CacheDebugPanel({ 
+  totalCount, 
+  displayedCount, 
+  cacheHit, 
+  backgroundLoading, 
+  loadingProgress,
+  dataLoaded,
+  onClearCache,
+  onGetCacheStats
+}: CacheDebugPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [stats, setStats] = useState<{ size: number; lastUpdated: Date | null; totalCount: number } | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [cacheStats, setCacheStats] = useState<any>(null)
+  const [isMobile, setIsMobile] = useState(false)
 
-  const loadStats = async () => {
-    setLoading(true)
-    try {
-      const cacheStats = await getCacheStats()
-      setStats(cacheStats)
-    } catch (error) {
-      console.error('캐시 통계 로드 실패:', error)
-    } finally {
-      setLoading(false)
+  const handleGetCacheStats = async () => {
+    const stats = await onGetCacheStats()
+    setCacheStats(stats)
+    
+    // 모바일 환경 감지
+    if (typeof window !== 'undefined') {
+      setIsMobile(window.innerWidth < 768)
     }
   }
 
-  const handleClearCache = async () => {
-    if (confirm('캐시를 모두 삭제하시겠습니까? 다음 방문시 데이터를 다시 로드해야 합니다.')) {
-      setLoading(true)
-      try {
-        await clearCache()
-        await loadStats()
-        alert('캐시가 성공적으로 삭제되었습니다.')
-      } catch (error) {
-        console.error('캐시 삭제 실패:', error)
-        alert('캐시 삭제 중 오류가 발생했습니다.')
-      } finally {
-        setLoading(false)
-      }
-    }
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  useEffect(() => {
-    if (isOpen && !stats) {
-      loadStats()
-    }
-  }, [isOpen])
+  const getLoadingStatus = () => {
+    if (!dataLoaded) return '초기 로딩 중...'
+    if (backgroundLoading) return `백그라운드 로딩 중... (${loadingProgress}%)`
+    if (totalCount === displayedCount) return '전체 데이터 로드 완료'
+    return `부분 로드 완료 (${displayedCount}/${totalCount})`
+  }
+
+  const getDataStatus = () => {
+    const percentage = totalCount > 0 ? Math.round((displayedCount / totalCount) * 100) : 0
+    
+    if (percentage === 100) return 'success'
+    if (percentage >= 50) return 'warning'
+    return 'error'
+  }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        {/* 토글 버튼 */}
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shadow-lg bg-white/90 backdrop-blur-sm border border-gray-200"
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            캐시 정보
-          </Button>
-        </CollapsibleTrigger>
-
-        {/* 패널 내용 */}
-        <CollapsibleContent className="mt-2">
-          <Card className="w-80 shadow-lg bg-white/95 backdrop-blur-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Database className="w-4 h-4" />
-                브라우저 캐시 상태
-              </CardTitle>
-              <CardDescription className="text-xs">
-                IndexedDB를 이용한 법안 데이터 캐싱
-              </CardDescription>
-            </CardHeader>
-            
-            <CardContent className="space-y-3">
-              {loading ? (
-                <div className="flex items-center justify-center py-4">
-                  <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                  <span className="text-sm text-gray-600">로딩 중...</span>
-                </div>
-              ) : stats ? (
-                <div className="space-y-3">
-                  {/* 캐시 크기 */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">캐시된 법안 수:</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {stats.size.toLocaleString()}개
-                    </Badge>
-                  </div>
-
-                  {/* 전체 법안 수와 비교 */}
-                  {stats.totalCount > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">전체 대비:</span>
-                      <Badge variant="outline" className="text-xs">
-                        {Math.round((stats.size / stats.totalCount) * 100)}%
-                      </Badge>
-                    </div>
-                  )}
-
-                  {/* 마지막 업데이트 */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">마지막 업데이트:</span>
-                    <span className="text-xs text-gray-500">
-                      {stats.lastUpdated 
-                        ? stats.lastUpdated.toLocaleString('ko-KR')
-                        : '없음'
-                      }
-                    </span>
-                  </div>
-
-                  {/* 캐시 상태 */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">상태:</span>
-                    <Badge variant={stats.size > 0 ? 'default' : 'destructive'} className="text-xs">
-                      {stats.size > 0 ? '활성' : '비어있음'}
-                    </Badge>
-                  </div>
-
-                  {/* 예상 용량 (대략적) */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">예상 용량:</span>
-                    <span className="text-xs text-gray-500">
-                      ~{Math.round(stats.size * 2 / 1024)}KB
-                    </span>
-                  </div>
-
-                  {/* 관리 버튼들 */}
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={loadStats}
-                      disabled={loading}
-                      className="flex-1"
-                    >
-                      <RefreshCw className="w-3 h-3 mr-1" />
-                      새로고침
-                    </Button>
-                    
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={handleClearCache}
-                      disabled={loading || stats.size === 0}
-                      className="flex-1"
-                    >
-                      <Trash2 className="w-3 h-3 mr-1" />
-                      삭제
-                    </Button>
-                  </div>
-
-                  {/* 정보 메시지 */}
-                  <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
-                    <Info className="w-3 h-3 mt-0.5 text-blue-500 flex-shrink-0" />
-                    <p className="text-xs text-blue-700">
-                      캐시는 24시간 후 자동 만료됩니다. 
-                      다른 페이지에서 돌아올 때 빠른 로딩을 위해 사용됩니다.
-                    </p>
-                  </div>
-                </div>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4" />
+            <span>데이터 상태</span>
+            <Badge variant={getDataStatus() as any}>
+              {displayedCount}/{totalCount}
+            </Badge>
+          </div>
+          <ChevronDown className="w-4 h-4" />
+        </Button>
+      </CollapsibleTrigger>
+      
+      <CollapsibleContent>
+        <Card className="mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              {isMobile ? (
+                <Smartphone className="w-4 h-4 text-blue-500" />
               ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm text-gray-500">캐시 정보를 불러올 수 없습니다</p>
-                </div>
+                <Monitor className="w-4 h-4 text-green-500" />
               )}
-            </CardContent>
-          </Card>
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+              {isMobile ? '모바일' : '데스크탑'} 환경
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* 로딩 상태 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">로딩 상태:</span>
+              <div className="flex items-center gap-2">
+                {backgroundLoading && (
+                  <RefreshCw className="w-3 h-3 animate-spin text-blue-500" />
+                )}
+                <span className="text-sm font-medium">{getLoadingStatus()}</span>
+              </div>
+            </div>
+
+            {/* 데이터 개수 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">로드된 데이터:</span>
+              <Badge variant={getDataStatus() as any}>
+                {displayedCount.toLocaleString()} / {totalCount.toLocaleString()}
+              </Badge>
+            </div>
+
+            {/* 캐시 상태 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">캐시 상태:</span>
+              <Badge variant={cacheHit ? 'default' : 'secondary'}>
+                {cacheHit ? '캐시 히트' : '캐시 미스'}
+              </Badge>
+            </div>
+
+            {/* 백그라운드 로딩 진행률 */}
+            {backgroundLoading && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">진행률:</span>
+                  <span className="text-sm font-medium">{loadingProgress}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${loadingProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 통합 전략 정보 */}
+            <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+              🚀 통합 로딩: 전체 개수 즉시 표시 → 1000개 우선 → 백그라운드 완성
+            </div>
+
+            {/* 개수 정확도 표시 */}
+            {displayedCount < totalCount && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                📊 탭별 개수는 샘플 기준 추정치입니다. 백그라운드 로딩 완료 후 정확해집니다.
+              </div>
+            )}
+
+            {/* 버튼들 */}
+            <div className="flex gap-2 pt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleGetCacheStats}
+                className="flex-1"
+              >
+                캐시 정보
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onClearCache}
+                className="flex-1"
+              >
+                캐시 초기화
+              </Button>
+            </div>
+
+            {/* 캐시 상세 정보 */}
+            {cacheStats && (
+              <div className="pt-2 border-t space-y-2">
+                <div className="text-xs text-muted-foreground">캐시 상세 정보:</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>사용량: {formatBytes(cacheStats.usedBytes)}</div>
+                  <div>할당량: {formatBytes(cacheStats.quota)}</div>
+                  <div>캐시된 법안: {cacheStats.cachedBillsCount}개</div>
+                  <div>마지막 업데이트: {cacheStats.lastUpdated || '없음'}</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </CollapsibleContent>
+    </Collapsible>
   )
 } 

@@ -12,6 +12,8 @@ export function useBillDetailApi() {
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [additionalLoading, setAdditionalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [backgroundLoading, setBackgroundLoading] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState(0)
   
   const supabaseRef = useRef<SupabaseClient | null>(null)
 
@@ -35,11 +37,13 @@ export function useBillDetailApi() {
     }
   }, [])
 
-  const fetchCommissionInfo = useCallback(async (billId: string) => {
+  const fetchCommissionInfo = useCallback(async (billId: string, isBackground = false) => {
     try {
-      setCommissionLoading(true)
+      if (!isBackground) {
+        setCommissionLoading(true)
+      }
       
-      console.log('위원회심사정보 API 호출 시작:', billId)
+      console.log(`${isBackground ? '🔄 백그라운드' : '⚡'} 위원회심사정보 API 호출 시작:`, billId)
       
       const response = await fetch(`/api/bill-commission?bill_id=${billId}`)
       
@@ -53,18 +57,23 @@ export function useBillDetailApi() {
       const parsedData = parseCommissionXML(data)
       
       setCommissionInfo({ ...parsedData, raw_data: data })
+      console.log(`✅ 위원회심사정보 로딩 완료 (${isBackground ? '백그라운드' : '일반'})`)
     } catch (err) {
       console.error('Error fetching commission info:', err)
       setCommissionInfo({ error: err instanceof Error ? err.message : '위원회심사정보 로딩 실패' })
     } finally {
-      setCommissionLoading(false)
+      if (!isBackground) {
+        setCommissionLoading(false)
+      }
     }
   }, [])
 
-  const fetchAdditionalApis = useCallback(async (billId: string) => {
+  const fetchAdditionalApis = useCallback(async (billId: string, isBackground = false) => {
     try {
-      setAdditionalLoading(true)
-      console.log('추가 API들 호출 시작:', billId)
+      if (!isBackground) {
+        setAdditionalLoading(true)
+      }
+      console.log(`${isBackground ? '🔄 백그라운드' : '⚡'} 추가 API들 호출 시작:`, billId)
       
       const apis = [
         { name: 'deliberate', url: `/api/bill-deliberate?bill_id=${billId}` },
@@ -75,48 +84,60 @@ export function useBillDetailApi() {
 
       const results: AdditionalApiInfo = {}
       const rawResults: {[key: string]: string} = {}
+      let completedCount = 0
+      const totalCount = apis.length
 
-      await Promise.allSettled(
-        apis.map(async (api) => {
-          try {
-            const response = await fetch(api.url)
-            if (response.ok) {
-              const data = await response.text()
-              rawResults[api.name] = data
-              
-              switch (api.name) {
-                case 'deliberate':
-                  results.deliberate = parseDeliberateXML(data)
-                  break
-                case 'transferred':
-                  results.transferred = parseTransferredXML(data)
-                  break
-                case 'promulgation':
-                  results.promulgation = parsePromulgationXML(data)
-                  break
-                case 'additional':
-                  results.additional = parseAdditionalXML(data)
-                  break
-                default:
-                  break
-              }
-            } else {
-              results[api.name as keyof AdditionalApiInfo] = { error: `${response.status} ${response.statusText}` }
-              rawResults[api.name] = `Error: ${response.status} ${response.statusText}`
+      const promises = apis.map(async (api) => {
+        try {
+          const response = await fetch(api.url)
+          if (response.ok) {
+            const data = await response.text()
+            rawResults[api.name] = data
+            
+            switch (api.name) {
+              case 'deliberate':
+                results.deliberate = parseDeliberateXML(data)
+                break
+              case 'transferred':
+                results.transferred = parseTransferredXML(data)
+                break
+              case 'promulgation':
+                results.promulgation = parsePromulgationXML(data)
+                break
+              case 'additional':
+                results.additional = parseAdditionalXML(data)
+                break
+              default:
+                break
             }
-          } catch (error) {
-            results[api.name as keyof AdditionalApiInfo] = { error: error instanceof Error ? error.message : '알 수 없는 오류' }
-            rawResults[api.name] = `Error: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+          } else {
+            results[api.name as keyof AdditionalApiInfo] = { error: `${response.status} ${response.statusText}` }
+            rawResults[api.name] = `Error: ${response.status} ${response.statusText}`
           }
-        })
-      )
+        } catch (error) {
+          results[api.name as keyof AdditionalApiInfo] = { error: error instanceof Error ? error.message : '알 수 없는 오류' }
+          rawResults[api.name] = `Error: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+        } finally {
+          completedCount++
+          if (isBackground) {
+            const progress = Math.round((completedCount / totalCount) * 100)
+            setLoadingProgress(progress)
+            console.log(`📈 백그라운드 API 로딩: ${progress}% (${completedCount}/${totalCount})`)
+          }
+        }
+      })
+
+      await Promise.allSettled(promises)
 
       setAdditionalInfo(results)
       setRawApiData(rawResults)
+      console.log(`✅ 추가 API들 로딩 완료 (${isBackground ? '백그라운드' : '일반'})`)
     } catch (err) {
       console.error('Error fetching additional APIs:', err)
     } finally {
-      setAdditionalLoading(false)
+      if (!isBackground) {
+        setAdditionalLoading(false)
+      }
     }
   }, [])
 
@@ -130,11 +151,11 @@ export function useBillDetailApi() {
     try {
       setLoading(true)
       setError(null)
+      setLoadingProgress(0)
 
-      // 최소 로딩 시간 보장 (UI 확인을 위해)
-      const startTime = Date.now()
+      console.log('⚡ 의안 기본정보 로딩 시작:', billId)
       
-      // 의안 정보 가져오기
+      // 1단계: 의안 기본정보 빠르게 로딩
       const { data, error } = await supabase
         .from('bills')
         .select('*')
@@ -146,24 +167,35 @@ export function useBillDetailApi() {
       }
 
       setBill(data)
+      setLoading(false) // 기본정보 로딩 완료
+      console.log('✅ 의안 기본정보 로딩 완료 - 화면 표시 시작')
 
-      // 최소 800ms 로딩 시간 보장
-      const elapsedTime = Date.now() - startTime
-      const minLoadingTime = 800
-      if (elapsedTime < minLoadingTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime))
-      }
-
-      // 위원회심사정보 API 호출
+      // 2단계: 백그라운드에서 상세정보 로딩
       if (data?.bill_id) {
-        fetchCommissionInfo(data.bill_id)
-        fetchAdditionalApis(data.bill_id)
+        setBackgroundLoading(true)
+        console.log('🔄 백그라운드 상세정보 로딩 시작')
+
+        // 위원회심사정보와 추가 API들을 병렬로 로딩
+        try {
+          await Promise.allSettled([
+            fetchCommissionInfo(data.bill_id, true),
+            fetchAdditionalApis(data.bill_id, true)
+          ])
+          
+          setLoadingProgress(100)
+          console.log('🎉 모든 상세정보 백그라운드 로딩 완료')
+        } catch (backgroundError) {
+          console.error('백그라운드 로딩 중 일부 오류:', backgroundError)
+          // 백그라운드 오류는 기본정보 표시에 영향주지 않음
+        } finally {
+          setBackgroundLoading(false)
+        }
       }
     } catch (err) {
       console.error('Error fetching bill details:', err)
       setError(err instanceof Error ? err.message : '의안 정보를 가져오는 중 오류가 발생했습니다.')
-    } finally {
       setLoading(false)
+      setBackgroundLoading(false)
     }
   }, [supabase, fetchCommissionInfo, fetchAdditionalApis])
 
@@ -175,6 +207,8 @@ export function useBillDetailApi() {
     loading,
     commissionLoading,
     additionalLoading,
+    backgroundLoading,
+    loadingProgress,
     error,
     fetchBillDetails,
     fetchCommissionInfo,

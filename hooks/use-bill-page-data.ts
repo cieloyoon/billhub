@@ -7,6 +7,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Bill, FilterState, RecentBillsData } from '@/types/bill-page'
 import { billCache } from '@/lib/bill-cache'
+import { cacheSyncManager } from '@/lib/cache-sync'
 
 export function useBillPageData() {
   const [allBills, setAllBills] = useState<Bill[]>([]) // 전체 데이터 캐시
@@ -56,6 +57,7 @@ export function useBillPageData() {
     recentProcessed: 0
   })
   const [currentFilteredCount, setCurrentFilteredCount] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
@@ -98,12 +100,46 @@ export function useBillPageData() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // 초기 데이터 로딩 (전체 데이터 한 번만)
+  // 강제 새로고침 트리거 상태
+  const [shouldForceRefresh, setShouldForceRefresh] = useState(false)
+  
+  // 강제 새로고침 콜백 등록
   useEffect(() => {
-    if (supabase && mounted && !dataLoaded) {
+    if (!mounted || !supabase) return
+
+    const forceRefresh = () => {
+      console.log('🔄 강제 새로고침 수행...')
+      // 먼저 모든 상태 초기화
+      setLoading(true)
+      setDataLoaded(false)
+      setAllBills([])
+      setFilteredBills([])
+      setDisplayedBills([])
+      setCurrentPage(1)
+      setTotalCount(0)
+      setCacheHit(false)
+      setError(null)
+      
+      // 강제 새로고침 트리거
+      setShouldForceRefresh(true)
+    }
+
+    const unregister = cacheSyncManager.registerForceRefreshCallback(forceRefresh)
+    return () => {
+      unregister()
+    }
+  }, [mounted, supabase])
+
+  // 초기 데이터 로딩 (전체 데이터 한 번만) + 강제 새로고침 처리
+  useEffect(() => {
+    if (supabase && mounted && (!dataLoaded || shouldForceRefresh)) {
+      if (shouldForceRefresh) {
+        console.log('🔄 강제 새로고침 - 데이터 재로드 시작')
+        setShouldForceRefresh(false)
+      }
       loadAllBills()
     }
-  }, [supabase, mounted, dataLoaded])
+  }, [supabase, mounted, dataLoaded, shouldForceRefresh])
 
   // 검색/필터/카테고리 변경시 클라이언트 사이드 필터링
   useEffect(() => {
@@ -342,6 +378,17 @@ export function useBillPageData() {
     setBackgroundLoading(true)
     setLoadingProgress(0)
     
+    // 모바일에서 백그라운드 작업 안정성을 위한 설정
+    let isPageVisible = true
+    const handleVisibilityChange = () => {
+      isPageVisible = !document.hidden
+      console.log(`📱 페이지 가시성 변경: ${isPageVisible ? '보임' : '숨김'}`)
+    }
+    
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
+    
     try {
       console.log('🔄 백그라운드에서 나머지 데이터 로드 시작...')
       
@@ -361,50 +408,94 @@ export function useBillPageData() {
       
       console.log(`📦 추가로 ${remainingCount}개 법안 로드 예정`)
       
-      const pageSize = 1000
+      // 빠른 백그라운드 로딩 설정
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+      const chunkSize = 1000 // 빠른 로딩을 위해 1000개씩
+      const delayBetweenChunks = isMobile ? 150 : 50 // 더 짧은 대기시간
+      const maxRetries = isMobile ? 5 : 3 // 모바일에서 더 많은 재시도
+      
+      console.log(`📱 환경: ${isMobile ? '모바일' : '데스크탑'}, 청크 크기: ${chunkSize}, 대기시간: ${delayBetweenChunks}ms, 재시도: ${maxRetries}회`)
+      
       let allBills = [...initialBills]
-      let page = 1 // 첫 번째 페이지는 이미 로드됨
+      let offset = initialBills.length // 초기 1000개 다음부터 시작
       
       while (allBills.length < totalCount) {
-        const from = page * pageSize
-        const to = from + pageSize - 1
+        let retryCount = 0
+        let chunkSuccess = false
+        
+        while (retryCount < maxRetries && !chunkSuccess) {
+          try {
+            console.log(`📄 청크 로딩: ${offset}~${offset + chunkSize - 1} [시도 ${retryCount + 1}/${maxRetries}]`)
+            
+            const { data, error: fetchError } = await supabase
+              .from('bills')
+              .select('*')
+              .order('propose_dt', { ascending: false, nullsFirst: false })
+              .order('bill_no', { ascending: false, nullsFirst: false })
+              .range(offset, offset + chunkSize - 1)
 
-        const { data, error: fetchError } = await supabase
-          .from('bills')
-          .select('*')
-          .order('propose_dt', { ascending: false, nullsFirst: false })
-          .order('bill_no', { ascending: false, nullsFirst: false })
-          .range(from, to)
+            if (fetchError) {
+              throw fetchError
+            }
 
-        if (fetchError) {
-          console.error(`페이지 ${page + 1} 로딩 오류:`, fetchError)
+            const bills = data || []
+            if (bills.length === 0) {
+              console.log('📄 더 이상 로드할 데이터가 없음')
+              chunkSuccess = true
+              break
+            }
+            
+            allBills = [...allBills, ...bills]
+            offset += bills.length
+            chunkSuccess = true
+            
+            // 진행률 업데이트
+            const progress = Math.min(Math.round((allBills.length / totalCount) * 100), 100)
+            setLoadingProgress(progress)
+            
+            console.log(`📈 백그라운드 로딩: ${progress}% (${allBills.length}/${totalCount})`)
+            
+            // 청크 간 대기 (UI 블로킹 방지 + 모바일 안정성)
+            await new Promise(resolve => setTimeout(resolve, delayBetweenChunks))
+            
+            // 모바일에서 페이지가 숨겨진 상태가 너무 오래 지속되면 잠시 대기
+            if (isMobile && !isPageVisible) {
+              let waitCount = 0
+              while (!isPageVisible && waitCount < 10) { // 최대 10초 대기
+                console.log(`📱 페이지 숨김 상태 - 1초 대기 중... (${waitCount + 1}/10)`)
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                waitCount++
+              }
+            }
+            
+          } catch (error) {
+            retryCount++
+            console.error(`청크 로딩 실패 (시도 ${retryCount}/${maxRetries}):`, error)
+            
+            if (retryCount < maxRetries) {
+              // 재시도 전 대기 시간 (모바일에서 더 긴 대기)
+              const baseWaitTime = isMobile ? 2000 : 1000
+              const waitTime = Math.min(baseWaitTime * retryCount, isMobile ? 8000 : 5000)
+              console.log(`⏳ ${waitTime}ms 후 재시도... (${isMobile ? '모바일' : '데스크탑'} 모드)`)
+              await new Promise(resolve => setTimeout(resolve, waitTime))
+            }
+          }
+        }
+        
+        if (!chunkSuccess) {
+          console.error(`청크 로딩 최종 실패 - 백그라운드 로딩 중단 (현재까지 ${allBills.length}개 로드됨)`)
           break
         }
-
-        const bills = data || []
-        if (bills.length === 0) break
-        
-        allBills = [...allBills, ...bills]
-        page++
-
-        // 진행률 업데이트
-        const progress = Math.min(Math.round((allBills.length / totalCount) * 100), 100)
-        setLoadingProgress(progress)
-        
-        console.log(`📄 백그라운드 로딩: ${progress}% (${allBills.length}/${totalCount})`)
-        
-        // UI 블로킹 방지를 위한 짧은 대기
-        await new Promise(resolve => setTimeout(resolve, 10))
       }
 
       console.log(`✅ 백그라운드 로딩 완료: ${allBills.length}개`)
       
       // 캐시에 저장
-      await billCache.setCachedBills(allBills, totalCount)
+      await billCache.setCachedBills(allBills, allBills.length)
       
       // 전체 데이터로 업데이트
       setAllBills(allBills)
-      setTotalCount(totalCount)
+      setTotalCount(allBills.length)
       
       return allBills
       
@@ -412,13 +503,18 @@ export function useBillPageData() {
       console.error('백그라운드 로딩 실패:', error)
       return initialBills
     } finally {
+      // 이벤트 리스너 정리
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
+      
       setBackgroundLoading(false)
       setLoadingProgress(100)
       backgroundLoadingRef.current = false
     }
   }, [supabase])
 
-  // 스마트 데이터 로딩 (캐시 우선, 없으면 점진적 로딩)
+  // 통합 데이터 로딩 전략 (모든 환경에서 동일)
   const loadAllBills = useCallback(async () => {
     if (!supabase) return
     
@@ -426,67 +522,139 @@ export function useBillPageData() {
     setError(null)
     
     try {
-      // 1단계: 캐시에서 빠른 로드 시도
-      const cachedBills = await loadFromCache()
+      // 1단계: 전체 개수 확인
+      const { count } = await supabase
+        .from('bills')
+        .select('*', { count: 'exact', head: true })
       
-      if (cachedBills) {
-        // 캐시 히트: 즉시 화면 표시
+      const totalBillCount = count || 0
+      console.log(`📊 전체 법안 개수: ${totalBillCount}개`)
+      
+      // 2단계: 캐시 확인 및 동기화 체크
+      const cachedBills = await loadFromCache()
+      let shouldUseCache = false
+      
+      if (cachedBills && cachedBills.length > 0) {
+        // 캐시 신선도 체크 - 최신 법안과 비교
+        try {
+          const { data: latestBill } = await supabase
+            .from('bills')
+            .select('updated_at, propose_dt, bill_no')
+            .order('updated_at', { ascending: false, nullsFirst: false })
+            .limit(1)
+            .single()
+          
+          const cacheMetadata = await billCache.getMetadata()
+          
+          if (latestBill && cacheMetadata) {
+            const latestUpdate = new Date(latestBill.updated_at).getTime()
+            const cacheTime = cacheMetadata.lastUpdated
+            const timeDiff = latestUpdate - cacheTime
+            
+            // 캐시가 최신 업데이트보다 새롭거나 1시간 이내면 사용
+            if (timeDiff <= 60 * 60 * 1000) { // 1시간
+              shouldUseCache = true
+              console.log('✅ 캐시가 최신 상태 - 캐시 사용')
+            } else {
+              console.log(`🔄 캐시가 오래됨 (${Math.round(timeDiff / (60 * 1000))}분) - 새로 로드`)
+              await billCache.clearCache()
+            }
+          }
+        } catch (syncError) {
+          console.warn('캐시 동기화 체크 실패, 캐시 사용:', syncError)
+          shouldUseCache = true // 체크 실패시에도 캐시 사용
+        }
+      }
+      
+      if (shouldUseCache && cachedBills) {
+        // 캐시 사용: 즉시 화면 표시
         setAllBills(cachedBills)
-        setTotalCount(cachedBills.length)
+        setTotalCount(Math.max(cachedBills.length, totalBillCount)) // 실제 전체 개수 우선
         setDataLoaded(true)
         setLoading(false)
         
-        // 탭별 개수 계산
-        calculateTabCounts(cachedBills)
+        // 탭별 개수 계산 (캐시가 전체라면 정확히, 아니면 추정)
+        if (cachedBills.length >= totalBillCount * 0.95) { // 95% 이상이면 거의 전체
+          calculateTabCounts(cachedBills)
+        } else {
+          calculateInitialTabCounts(cachedBills, totalBillCount)
+        }
         
         // 최근 탭 데이터 생성
         await setupRecentBills(cachedBills)
         
         console.log('🎯 캐시에서 즉시 로드 완료!')
         
-        // 무한 스크롤을 위한 짧은 딜레이
-        setTimeout(() => {
-          console.log('🔄 캐시 로드 후 상태 체크 완료')
-        }, 50)
+        // 백그라운드에서 데이터 개수 확인 (캐시가 전체 데이터보다 적을 수 있음)
+        if (totalBillCount > cachedBills.length) {
+          console.log(`🔄 캐시 데이터 부족 감지: ${cachedBills.length}/${totalBillCount} - 백그라운드 보완 로딩`)
+          
+          setTimeout(() => {
+            loadRemainingBills(cachedBills).then(allBills => {
+              if (allBills && allBills.length > cachedBills.length) {
+                console.log(`✅ 캐시 보완 완료: ${allBills.length}개`)
+                setAllBills(allBills)
+                                 setTotalCount(allBills.length)
+                 calculateTabCounts(allBills) // 정확한 개수로 업데이트
+                 setupRecentBills(allBills)
+                 console.log('📊 캐시 보완 완료 - 탭별 개수 정확히 업데이트됨')
+              }
+            }).catch(error => {
+              console.error('🚨 캐시 보완 실패 (기존 캐시 유지):', error)
+            })
+          }, 1000) // 캐시 표시 후 1초 뒤 보완
+        }
         
         return
       }
       
-      // 2단계: 캐시 미스 - 최신 1000개 우선 로드
+      // 3단계: 모든 환경에서 동일한 전략 - 최신 1000개 우선 로드
+      console.log('⚡ 통합 로딩 전략: 최신 1000개 우선')
       const initialBills = await loadInitialBills()
       
       if (initialBills.length > 0) {
         setAllBills(initialBills)
+        setTotalCount(totalBillCount) // 실제 전체 개수 먼저 설정
         setDataLoaded(true)
         setLoading(false)
         
-        // 탭별 개수 계산
-        calculateTabCounts(initialBills)
+        // 탭별 개수 계산 (전체 개수 기준으로 추정)
+        calculateInitialTabCounts(initialBills, totalBillCount)
         
         // 화면에 즉시 표시
-        console.log('⚡ 초기 데이터로 화면 표시 시작')
+        console.log('⚡ 초기 1000개로 화면 표시 시작')
         
         // 최근 탭 데이터 생성
         await setupRecentBills(initialBills)
         
-        // 무한 스크롤을 위한 짧은 딜레이
-        setTimeout(() => {
-          console.log('🔄 초기 로드 후 상태 체크 완료')
-        }, 50)
-        
-        // 3단계: 백그라운드에서 나머지 데이터 로드
-        setTimeout(() => {
-          loadRemainingBills(initialBills).then(allBills => {
-            if (allBills && allBills.length > initialBills.length) {
-              setAllBills(allBills)
-              // 탭별 개수 재계산
-              calculateTabCounts(allBills)
-              // 업데이트된 데이터로 최근 탭 재생성
-              setupRecentBills(allBills)
-              console.log('🔄 백그라운드 로딩으로 전체 데이터 업데이트됨')
-            }
-          })
-        }, 100)
+        // 4단계: 나머지 데이터가 있으면 백그라운드에서 로드
+        if (totalBillCount > initialBills.length) {
+          console.log(`🔄 백그라운드 로딩 예정: ${totalBillCount - initialBills.length}개 추가`)
+          
+          // 모든 환경에서 동일한 백그라운드 로딩 전략
+          setTimeout(() => {
+            console.log('🔄 백그라운드 로딩 시작 (통합 전략)')
+            loadRemainingBills(initialBills).then(allBills => {
+              if (allBills && allBills.length > initialBills.length) {
+                console.log(`✅ 백그라운드 로딩 완료: ${allBills.length}개 (추가 ${allBills.length - initialBills.length}개)`)
+                setAllBills(allBills)
+                setTotalCount(allBills.length)
+                // 탭별 개수 정확히 재계산
+                calculateTabCounts(allBills)
+                console.log('📊 백그라운드 로딩 완료 - 탭별 개수 정확히 업데이트됨')
+                // 업데이트된 데이터로 최근 탭 재생성
+                setupRecentBills(allBills)
+              }
+            }).catch(error => {
+              console.error('🚨 백그라운드 로딩 실패 (기존 데이터 유지):', error)
+              // 실패해도 초기 1000개는 그대로 사용
+            })
+          }, 300) // 모든 환경에서 300ms 대기
+        } else {
+          console.log('🎉 모든 데이터가 초기 로딩에 포함됨')
+          // 전체 데이터를 캐시에 저장
+          await billCache.setCachedBills(initialBills, totalBillCount)
+        }
       }
       
     } catch (err) {
@@ -542,7 +710,54 @@ export function useBillPageData() {
     }
   }, [])
 
-  // 각 탭별 개수 계산 함수 추가
+  // 초기 탭별 개수 추정 (전체 개수 기준)
+  const calculateInitialTabCounts = useCallback((sampleBills: Bill[], totalCount: number) => {
+    const sampleSize = sampleBills.length
+    if (sampleSize === 0) return
+    
+    // 샘플 데이터에서 비율 계산
+    const pendingRatio = sampleBills.filter(bill => bill.pass_gubn === '계류의안').length / sampleSize
+    const passedRatio = sampleBills.filter(bill => 
+      ['원안가결', '수정가결', '대안반영폐기', '수정안반영폐기'].includes(bill.general_result || '') &&
+      !['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+    ).length / sampleSize
+    const rejectedRatio = sampleBills.filter(bill => 
+      ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
+      ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+    ).length / sampleSize
+    
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const recentRatio = sampleBills.filter(bill => 
+      bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
+    ).length / sampleSize
+    
+    const oneWeekAgo = new Date()
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+    const recentProposedRatio = sampleBills.filter(bill => 
+      bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
+    ).length / sampleSize
+    
+    const recentProcessedRatio = sampleBills.filter(bill => 
+      bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
+    ).length / sampleSize
+    
+    // 전체 개수 기준으로 추정
+    setTabCounts({
+      all: totalCount,
+      pending: Math.round(totalCount * pendingRatio),
+      passed: Math.round(totalCount * passedRatio),
+      rejected: Math.round(totalCount * rejectedRatio),
+      recent: Math.round(totalCount * recentRatio),
+      recentProposed: Math.round(totalCount * recentProposedRatio),
+      recentUpdated: 0, // API에서 가져올 예정
+      recentProcessed: Math.round(totalCount * recentProcessedRatio)
+    })
+    
+    console.log(`📊 탭별 개수 추정 완료 (샘플: ${sampleSize}, 전체: ${totalCount})`)
+  }, [])
+
+  // 각 탭별 개수 정확히 계산 (전체 데이터 로드 후)
   const calculateTabCounts = useCallback((bills: Bill[]) => {
     const all = bills.length
     const pending = bills.filter(bill => bill.pass_gubn === '계류의안').length
@@ -581,6 +796,8 @@ export function useBillPageData() {
       recentUpdated: 0, // API에서 가져올 예정
       recentProcessed
     })
+    
+    console.log(`📊 탭별 개수 정확히 계산 완료: 전체 ${all}개`)
   }, [])
 
   // 클라이언트 사이드 필터링 및 표시
@@ -720,6 +937,35 @@ export function useBillPageData() {
     })
   }
 
+  // 수동 새로고침
+  const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing) return
+    
+    setIsRefreshing(true)
+    console.log('🔄 수동 새로고침 시작...')
+    
+    try {
+      // 캐시 완전 무효화
+      await cacheSyncManager.invalidateAllCaches()
+      
+      // 상태 직접 설정 (자동으로 useEffect가 트리거됨)
+      setLoading(true)
+      setDataLoaded(false)
+      setAllBills([])
+      setFilteredBills([])
+      setDisplayedBills([])
+      setCurrentPage(1)
+      setTotalCount(0)
+      setCacheHit(false)
+      setError(null)
+      setIsRefreshing(false)
+      
+    } catch (error) {
+      console.error('수동 새로고침 실패:', error)
+      setIsRefreshing(false)
+    }
+  }, [isRefreshing])
+
   return {
     // 상태들
     allBills,
@@ -745,6 +991,7 @@ export function useBillPageData() {
     loadingProgress,
     cacheHit,
     loadMoreRef,
+    isRefreshing,
     
     // 각 탭별 개수 state 추가
     tabCounts,
@@ -758,6 +1005,7 @@ export function useBillPageData() {
     handleFilterChange,
     clearFilters,
     loadMoreBills,
+    handleManualRefresh,
     clearCache: () => billCache.clearCache(),
     getCacheStats: () => billCache.getCacheStats()
   }

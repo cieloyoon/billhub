@@ -8,6 +8,7 @@ class CacheSyncManager {
   private syncInterval: NodeJS.Timeout | null = null
   private lastSyncTime: number = 0
   private cleanupListeners: (() => void) | null = null
+  private forceRefreshCallbacks: Set<() => void> = new Set()
 
   // 사용자 액션 기반 동기화 설정
   setupUserActionSync() {
@@ -141,13 +142,36 @@ class CacheSyncManager {
     // 페이지 포커스 시 동기화
     const handleFocus = async () => {
       const now = Date.now()
-      const oneMinute = 60 * 1000 // 1분
+      const thirtySeconds = 30 * 1000 // 30초로 단축
 
-      // 마지막 체크로부터 1분 이상 지났을 때만 동기화
-      if (now - this.lastSyncTime > oneMinute) {
+      // 마지막 체크로부터 30초 이상 지났을 때만 동기화
+      if (now - this.lastSyncTime > thirtySeconds) {
         console.log('👁️ 페이지 포커스 - 캐시 동기화 체크...')
         await this.checkForUpdates()
         this.lastSyncTime = now
+      }
+    }
+
+    // 페이지 로드 시 즉시 동기화 체크
+    const handleLoad = async () => {
+      console.log('🔄 페이지 로드 - 캐시 동기화 체크...')
+      // 새 세션이거나 오래된 캐시면 무효화
+      const shouldInvalidate = await this.shouldInvalidateOnLoad()
+      if (shouldInvalidate) {
+        console.log('🧹 새 세션 감지 - 캐시 무효화 수행')
+        await this.invalidateAllCaches()
+      } else {
+        await this.checkForUpdates()
+      }
+      this.lastSyncTime = Date.now()
+    }
+
+    // 새 세션에서 돌아왔을 때 체크
+    const handlePageShow = async (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        // 브라우저 캐시에서 복원된 경우
+        console.log('📱 페이지 복원 감지 - 캐시 동기화 체크')
+        await this.checkForUpdates()
       }
     }
 
@@ -160,47 +184,132 @@ class CacheSyncManager {
 
     // beforeunload 이벤트 (페이지 떠날 때)
     const handleBeforeUnload = () => {
+      // 새로고침/종료 시간 저장
+      sessionStorage.setItem('lastPageExit', Date.now().toString())
       console.log('📤 페이지 종료 - 동기화 정리...')
       this.stopSync()
     }
 
     // 이벤트 리스너 등록
     window.addEventListener('focus', handleFocus)
+    window.addEventListener('load', handleLoad)
+    window.addEventListener('pageshow', handlePageShow)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('beforeunload', handleBeforeUnload)
 
     // 정리 함수 저장 (나중에 제거용)
     this.cleanupListeners = () => {
       window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('load', handleLoad)
+      window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
 
-    // 초기 동기화 체크
-    handleFocus()
+    // 즉시 동기화 체크 (새로고침 대응)
+    if (document.readyState === 'complete') {
+      handleLoad()
+    } else {
+      // DOM이 아직 로딩 중이면 로드 완료를 기다림
+      window.addEventListener('load', handleLoad, { once: true })
+    }
   }
 
-  // 업데이트 체크
+  // 로드시 캐시 무효화 필요성 체크
+  private async shouldInvalidateOnLoad(): Promise<boolean> {
+    try {
+      // 1. 새 세션 체크 (30분 이상 지났으면 새 세션으로 간주)
+      const lastExit = sessionStorage.getItem('lastPageExit')
+      const thirtyMinutes = 30 * 60 * 1000 // 30분
+      
+      if (lastExit) {
+        const timeSinceExit = Date.now() - parseInt(lastExit)
+        if (timeSinceExit > thirtyMinutes) {
+          console.log('⏰ 30분 이상 지난 세션 - 캐시 무효화 필요')
+          return true
+        }
+      }
+
+      // 2. 하드 새로고침 체크 (Ctrl+F5, Cmd+Shift+R)
+      if (performance.navigation?.type === 1) { // TYPE_RELOAD
+        console.log('🔄 하드 새로고침 감지 - 캐시 무효화 필요')
+        return true
+      }
+
+      // 3. 캐시 데이터 존재 여부 체크
+      const cachedBills = await billCache.getCachedBills()
+      if (!cachedBills || cachedBills.length === 0) {
+        console.log('📭 캐시 데이터 없음 - 새로운 로드 필요')
+        return false // 이 경우는 무효화가 아니라 첫 로드
+      }
+
+      // 4. 일정 시간마다 강제 무효화 (하루에 한 번)
+      const lastFullSync = localStorage.getItem('lastFullCacheSync')
+      const oneDay = 24 * 60 * 60 * 1000 // 24시간
+      
+      if (lastFullSync) {
+        const timeSinceSync = Date.now() - parseInt(lastFullSync)
+        if (timeSinceSync > oneDay) {
+          console.log('📅 일일 캐시 무효화 시간 도달')
+          return true
+        }
+      } else {
+        // 처음 방문이면 시간 저장
+        localStorage.setItem('lastFullCacheSync', Date.now().toString())
+      }
+
+      return false
+    } catch (error) {
+      console.error('캐시 무효화 체크 실패:', error)
+      return false
+    }
+  }
+
+  // 업데이트 체크 (개선된 버전)
   private async checkForUpdates() {
     try {
       // 캐시된 데이터의 최신 업데이트 시간 확인
       const cachedMeta = await billCache.getCacheMetadata()
-      if (!cachedMeta) return
+      if (!cachedMeta) {
+        console.log('📭 캐시 메타데이터 없음 - 동기화 불필요')
+        return
+      }
+
+      console.log('🔍 캐시 동기화 체크 중...')
 
       // 실제 DB에서 최신 업데이트 시간 확인
       const { data: latestBill } = await this.supabase
         .from('bills')
-        .select('updated_at')
-        .order('updated_at', { ascending: false })
+        .select('updated_at, propose_dt, bill_no')
+        .order('updated_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .single()
 
-      if (latestBill && new Date(latestBill.updated_at) > new Date(cachedMeta.lastUpdated)) {
-        console.log('🔄 새로운 데이터 감지, 캐시 무효화...')
-        await billCache.clearCache()
+      if (latestBill) {
+        const latestUpdate = new Date(latestBill.updated_at).getTime()
+        const cacheTime = cachedMeta.lastUpdated
+        const timeDiff = latestUpdate - cacheTime
+
+        console.log(`📊 동기화 체크: 최신 업데이트 ${new Date(latestUpdate).toLocaleString()}, 캐시 ${new Date(cacheTime).toLocaleString()}`)
+
+        // 캐시가 1시간 이상 오래되었거나 새로운 업데이트가 있으면 무효화
+        if (timeDiff > 60 * 60 * 1000) { // 1시간
+          console.log(`🔄 캐시가 오래됨 (${Math.round(timeDiff / (60 * 1000))}분) - 캐시 무효화`)
+          await billCache.clearCache()
+          
+          // 캐시 무효화 이벤트 발생 (다른 컴포넌트에서 감지 가능)
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cache-invalidated', { 
+              detail: { reason: 'outdated', timeDiff } 
+            }))
+          }
+        } else {
+          console.log('✅ 캐시가 최신 상태')
+        }
       }
     } catch (error) {
       console.error('업데이트 체크 실패:', error)
+      // 체크 실패해도 에러 발생시키지 않음 (캐시 유지)
     }
   }
 
@@ -267,6 +376,48 @@ class CacheSyncManager {
     } catch (error) {
       console.error('캐시 상태 확인 실패:', error)
       return null
+    }
+  }
+
+  // 강제 새로고침 콜백 등록
+  registerForceRefreshCallback(callback: () => void) {
+    this.forceRefreshCallbacks.add(callback)
+    return () => this.forceRefreshCallbacks.delete(callback)
+  }
+
+  // 강제 새로고침 실행
+  triggerForceRefresh() {
+    console.log('🔄 강제 새로고침 트리거됨')
+    this.forceRefreshCallbacks.forEach(callback => {
+      try {
+        callback()
+      } catch (error) {
+        console.error('강제 새로고침 콜백 실행 실패:', error)
+      }
+    })
+  }
+
+  // 캐시 완전 무효화 (새로고침시 사용)
+  async invalidateAllCaches(triggerRefresh = false) {
+    console.log('🧹 모든 캐시 무효화...')
+    try {
+      // 모든 캐시 클리어
+      await billCache.clearCache()
+      await favoritesCache.clearAllCache()
+      
+      // 전체 동기화 시간 갱신
+      localStorage.setItem('lastFullCacheSync', Date.now().toString())
+      
+      // 필요시에만 강제 새로고침 트리거
+      if (triggerRefresh) {
+        this.triggerForceRefresh()
+      }
+      
+      console.log('✅ 모든 캐시 무효화 완료')
+      return true
+    } catch (error) {
+      console.error('❌ 캐시 무효화 실패:', error)
+      return false
     }
   }
 }
