@@ -17,36 +17,19 @@ export function useMyBillData() {
   const [favorites, setFavorites] = useState<FavoriteBill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
   const [mounted, setMounted] = useState(false)
   const [cacheHit, setCacheHit] = useState(false)
   const [hybridMode, setHybridMode] = useState(false) // 메인 데이터 + 즐겨찾기 ID 조합 모드
+  
+  const supabase = createClient() // 클라이언트를 직접 생성
 
   // 컴포넌트 마운트 확인
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Supabase 클라이언트 초기화
-  useEffect(() => {
-    if (!mounted || typeof window === 'undefined') return
-    
-    try {
-      const client = createClient()
-      setSupabase(client)
-    } catch {
-      setError('서비스에 연결할 수 없습니다.')
-      setLoading(false)
-    }
-  }, [mounted])
-
   // 사용자 ID 가져오기
   const getUserId = useCallback(async (): Promise<string | null> => {
-    if (!supabase) {
-      console.log('🚫 Supabase 클라이언트가 없음')
-      return null
-    }
-    
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
       console.log('👤 사용자 상태 체크:', { 
@@ -187,8 +170,6 @@ export function useMyBillData() {
 
   // 스마트 로딩: 캐시 → 하이브리드 → API 순서로 시도
   const loadFavorites = useCallback(async () => {
-    if (!supabase) return
-    
     setLoading(true)
     setError(null)
     setCacheHit(false)
@@ -252,15 +233,44 @@ export function useMyBillData() {
     }
   }, [getUserId])
 
-  // 데이터 로딩 트리거
-  useEffect(() => {
-    if (supabase && mounted) {
-      console.log('🔄 즐겨찾기 로딩 시작 (Supabase 준비됨)')
-      loadFavorites()
-    } else {
-      console.log('⏳ 대기 중...', { supabase: !!supabase, mounted })
+  // 외부에서 즐겨찾기 상태 변경 감지 (실시간 업데이트)
+  const refreshFavorites = useCallback(async () => {
+    console.log('🔄 즐겨찾기 새로고침 요청')
+    
+    // 캐시 무효화 후 다시 로드
+    const userId = await getUserId()
+    if (userId) {
+      await favoritesCache.invalidateUserCache(userId)
+      await loadFavorites()
     }
-  }, [supabase, mounted, loadFavorites])
+  }, [getUserId, loadFavorites])
+
+  // 데이터 로딩 트리거 (마운트 후 한 번만 실행)
+  useEffect(() => {
+    if (mounted) {
+      console.log('🔄 즐겨찾기 로딩 시작 (컴포넌트 마운트됨)')
+      loadFavorites()
+    }
+  }, [mounted, loadFavorites])
+
+  // 실시간 즐겨찾기 업데이트 감지
+  useEffect(() => {
+    if (!mounted) return
+
+    const handleFavoritesUpdate = (event: CustomEvent) => {
+      const { action, favorites } = event.detail
+      console.log('🔄 실시간 즐겨찾기 업데이트 감지:', action)
+      
+      // 로컬 상태 즉시 업데이트
+      setFavorites(favorites)
+    }
+
+    window.addEventListener('favoritesUpdated', handleFavoritesUpdate as EventListener)
+    
+    return () => {
+      window.removeEventListener('favoritesUpdated', handleFavoritesUpdate as EventListener)
+    }
+  }, [mounted])
 
   return {
     favorites,
@@ -271,6 +281,7 @@ export function useMyBillData() {
     hybridMode,
     loadFavorites,
     updateFavoriteCache,
+    refreshFavorites,
     clearCache: async () => {
       const userId = await getUserId()
       if (userId) {

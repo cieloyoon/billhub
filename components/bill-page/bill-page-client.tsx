@@ -142,7 +142,7 @@ export default function BillPageClient() {
             recentSubTab={recentSubTab}
             onRecentSubTabChange={setRecentSubTab}
             recentBills={recentBills}
-            loading={loading}
+            loading={loading && !dataLoaded}
             viewMode={viewMode}
             isFavorited={isFavorited}
             onFavoriteToggle={handleFavoriteToggle}

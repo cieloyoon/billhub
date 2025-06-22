@@ -139,45 +139,66 @@ class CacheSyncManager {
 
   // 페이지 포커스 기반 동기화
   private setupFocusBasedSync() {
+    let isCheckingForUpdates = false // 중복 실행 방지
+
     // 페이지 포커스 시 동기화
     const handleFocus = async () => {
+      if (isCheckingForUpdates) return // 이미 체크 중이면 스킵
+      
       const now = Date.now()
-      const thirtySeconds = 30 * 1000 // 30초로 단축
+      const fiveMinutes = 5 * 60 * 1000 // 5분으로 늘림
 
-      // 마지막 체크로부터 30초 이상 지났을 때만 동기화
-      if (now - this.lastSyncTime > thirtySeconds) {
+      // 마지막 체크로부터 5분 이상 지났을 때만 동기화
+      if (now - this.lastSyncTime > fiveMinutes) {
         console.log('👁️ 페이지 포커스 - 캐시 동기화 체크...')
-        await this.checkForUpdates()
-        this.lastSyncTime = now
+        isCheckingForUpdates = true
+        try {
+          await this.checkForUpdates()
+          this.lastSyncTime = now
+        } finally {
+          isCheckingForUpdates = false
+        }
       }
     }
 
     // 페이지 로드 시 즉시 동기화 체크
     const handleLoad = async () => {
+      if (isCheckingForUpdates) return // 이미 체크 중이면 스킵
+      
       console.log('🔄 페이지 로드 - 캐시 동기화 체크...')
-      // 새 세션이거나 오래된 캐시면 무효화
-      const shouldInvalidate = await this.shouldInvalidateOnLoad()
-      if (shouldInvalidate) {
-        console.log('🧹 새 세션 감지 - 캐시 무효화 수행')
-        await this.invalidateAllCaches()
-      } else {
-        await this.checkForUpdates()
+      isCheckingForUpdates = true
+      try {
+        // 새 세션이거나 오래된 캐시면 무효화
+        const shouldInvalidate = await this.shouldInvalidateOnLoad()
+        if (shouldInvalidate) {
+          console.log('🧹 새 세션 감지 - 캐시 무효화 수행')
+          await this.invalidateAllCaches()
+        } else {
+          await this.checkForUpdates()
+        }
+        this.lastSyncTime = Date.now()
+      } finally {
+        isCheckingForUpdates = false
       }
-      this.lastSyncTime = Date.now()
     }
 
     // 새 세션에서 돌아왔을 때 체크
     const handlePageShow = async (event: PageTransitionEvent) => {
-      if (event.persisted) {
+      if (event.persisted && !isCheckingForUpdates) {
         // 브라우저 캐시에서 복원된 경우
         console.log('📱 페이지 복원 감지 - 캐시 동기화 체크')
-        await this.checkForUpdates()
+        isCheckingForUpdates = true
+        try {
+          await this.checkForUpdates()
+        } finally {
+          isCheckingForUpdates = false
+        }
       }
     }
 
     // 페이지 가시성 변경 감지
     const handleVisibilityChange = async () => {
-      if (!document.hidden) {
+      if (!document.hidden && !isCheckingForUpdates) {
         await handleFocus()
       }
     }

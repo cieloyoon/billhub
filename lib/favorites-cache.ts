@@ -168,7 +168,10 @@ class FavoritesCacheManager {
   ): Promise<void> {
     try {
       const cached = await this.getCachedFavorites(userId)
-      if (!cached) return // 캐시가 없으면 업데이트하지 않음
+      if (!cached) {
+        console.log('캐시가 없어서 업데이트 건너뜀')
+        return // 캐시가 없으면 업데이트하지 않음
+      }
 
       if (action === 'add' && billData) {
         // 이미 있는지 체크
@@ -179,10 +182,12 @@ class FavoritesCacheManager {
             created_at: new Date().toISOString(),
             bills: billData
           })
+          console.log(`✅ 캐시에 즐겨찾기 추가: ${billId}`)
         }
       } else if (action === 'remove') {
         cached.favoriteIds = cached.favoriteIds.filter(id => id !== billId)
         cached.favoriteDetails = cached.favoriteDetails.filter(item => item.bill_id !== billId)
+        console.log(`✅ 캐시에서 즐겨찾기 제거: ${billId}`)
       }
 
       cached.lastUpdated = Date.now()
@@ -192,6 +197,13 @@ class FavoritesCacheManager {
         cached.favoriteIds, 
         cached.favoriteDetails
       )
+
+      // 브라우저 이벤트 발생 (관심의안 페이지 실시간 업데이트용)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('favoritesUpdated', {
+          detail: { userId, billId, action, favorites: cached.favoriteDetails }
+        }))
+      }
     } catch (error) {
       console.error('즐겨찾기 캐시 업데이트 실패:', error)
     }

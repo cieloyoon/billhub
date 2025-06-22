@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { BillCard } from '@/components/bill/bill-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,7 +22,7 @@ interface RecentBillsTabsProps {
   }
 }
 
-export function RecentBillsTabs({
+export const RecentBillsTabs = memo(function RecentBillsTabs({
   recentSubTab,
   onRecentSubTabChange,
   recentBills,
@@ -68,8 +69,8 @@ export function RecentBillsTabs({
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-2xl">📥</div>
                 <div>
-                              <h3 className="text-lg font-semibold">최근 접수된 의안</h3>
-            <p className="text-sm text-gray-600">최근 일주일간 새로 접수된 의안들입니다</p>
+                  <h3 className="text-lg font-semibold">최근 접수된 의안</h3>
+                  <p className="text-sm text-gray-600">최근 일주일간 새로 접수된 의안들입니다</p>
                 </div>
               </div>
               <div className={`grid gap-6 ${
@@ -101,8 +102,8 @@ export function RecentBillsTabs({
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-2xl">🔄</div>
                 <div>
-                              <h3 className="text-lg font-semibold">최근 진행 단계 변경된 의안</h3>
-            <p className="text-sm text-gray-600">최근 일주일간 진행 단계가 변경된 의안들입니다</p>
+                  <h3 className="text-lg font-semibold">최근 진행 단계 변경된 의안</h3>
+                  <p className="text-sm text-gray-600">최근 일주일간 진행 단계가 변경된 의안들입니다</p>
                 </div>
               </div>
               <div className={`grid gap-6 ${
@@ -140,8 +141,8 @@ export function RecentBillsTabs({
               <div className="flex items-center gap-2 mb-4">
                 <div className="text-2xl">✅</div>
                 <div>
-                              <h3 className="text-lg font-semibold">최근 처리 완료된 의안</h3>
-            <p className="text-sm text-gray-600">최근 일주일간 처리가 완료된 의안들입니다</p>
+                  <h3 className="text-lg font-semibold">최근 처리 완료된 의안</h3>
+                  <p className="text-sm text-gray-600">최근 일주일간 처리가 완료된 의안들입니다</p>
                 </div>
               </div>
               <div className={`grid gap-6 ${
@@ -171,4 +172,4 @@ export function RecentBillsTabs({
       </Tabs>
     </div>
   )
-} 
+}) 

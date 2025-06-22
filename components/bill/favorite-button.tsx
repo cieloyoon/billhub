@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Star, Bell } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useBillSync } from '@/hooks/use-bill-sync'
-import { useNotificationSubscription } from '@/hooks/use-notification-subscription'
+import { favoritesCache } from '@/lib/favorites-cache'
+import { billCache } from '@/lib/bill-cache'
 
 interface FavoriteButtonProps {
   billId: string
@@ -16,7 +17,6 @@ export function FavoriteButton({ billId, initialIsFavorited = false, onToggle }:
   const [isLoading, setIsLoading] = useState(false)
   const supabase = createClient()
   const { isFavorited: contextIsFavorited, addFavorite, removeFavorite } = useBillSync()
-  const { subscribe, unsubscribe } = useNotificationSubscription(billId)
   
   const isFavorited = contextIsFavorited(billId) || initialIsFavorited
 
@@ -35,15 +35,22 @@ export function FavoriteButton({ billId, initialIsFavorited = false, onToggle }:
       }
 
       if (isFavorited) {
-        // 즐겨찾기 제거 + 알림 구독 해제
+        // 즐겨찾기 제거 (알림 구독도 자동 해제됨)
         const favoriteResponse = await fetch(`/api/favorites?bill_id=${billId}`, {
           method: 'DELETE',
         })
         
         if (favoriteResponse.ok) {
           removeFavorite(billId)
-          // 알림 구독도 해제
-          await unsubscribe(billId)
+          
+          // 즐겨찾기 캐시 무효화 (관심의안 페이지에서 즉시 반영)
+          try {
+            await favoritesCache.updateFavoriteInCache(user.id, billId, 'remove')
+            console.log('✅ 즐겨찾기 제거 - 캐시 업데이트 완료')
+          } catch (cacheError) {
+            console.log('캐시 업데이트 무시:', cacheError)
+          }
+          
           onToggle?.(false)
         } else {
           const error = await favoriteResponse.json()
@@ -51,7 +58,7 @@ export function FavoriteButton({ billId, initialIsFavorited = false, onToggle }:
           alert(`즐겨찾기 제거 중 오류가 발생했습니다: ${error.error || 'Unknown error'}`)
         }
       } else {
-        // 즐겨찾기 추가 + 알림 구독
+        // 즐겨찾기 추가 (알림 구독도 자동 추가됨)
         const favoriteResponse = await fetch('/api/favorites', {
           method: 'POST',
           headers: {
@@ -62,15 +69,38 @@ export function FavoriteButton({ billId, initialIsFavorited = false, onToggle }:
         
         if (favoriteResponse.ok) {
           addFavorite(billId)
-          // 알림 구독도 추가
-          await subscribe(billId)
+          
+          // 즐겨찾기 캐시 업데이트 (관심의안 페이지에서 즉시 반영)
+          try {
+            const allBills = await billCache.getCachedBills()
+            const billData = allBills?.find(bill => bill.bill_id === billId)
+            if (billData) {
+              await favoritesCache.updateFavoriteInCache(user.id, billId, 'add', billData)
+              console.log('✅ 즐겨찾기 추가 - 캐시 업데이트 완료')
+            }
+          } catch (cacheError) {
+            console.log('캐시 업데이트 무시:', cacheError)
+          }
+          
           onToggle?.(true)
         } else {
           const error = await favoriteResponse.json()
           if (favoriteResponse.status === 409) {
             // 이미 즐겨찾기에 있음
             addFavorite(billId)
-            await subscribe(billId)
+            
+            // 409 에러여도 캐시 업데이트 시도
+            try {
+              const allBills = await billCache.getCachedBills()
+              const billData = allBills?.find(bill => bill.bill_id === billId)
+              if (billData) {
+                await favoritesCache.updateFavoriteInCache(user.id, billId, 'add', billData)
+                console.log('✅ 즐겨찾기 추가 (409) - 캐시 업데이트 완료')
+              }
+            } catch (cacheError) {
+              console.log('캐시 업데이트 무시:', cacheError)
+            }
+            
             onToggle?.(true)
           } else {
             console.error('Error adding favorite:', error)

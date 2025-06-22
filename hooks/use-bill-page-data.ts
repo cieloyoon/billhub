@@ -23,11 +23,7 @@ export function useBillPageData() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [recentSubTab, setRecentSubTab] = useState('proposed')
-  const [recentBills, setRecentBills] = useState<RecentBillsData>({
-    recentProposed: [],
-    recentProcessed: [],
-    recentUpdated: []
-  })
+  // recentBills 상태 제거 - allBills에서 계산으로 대체
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy] = useState('bill_no')
   const [filters, setFilters] = useState<FilterState>({
@@ -64,6 +60,7 @@ export function useBillPageData() {
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const backgroundLoadingRef = useRef(false)
+  const backgroundLoadingPromiseRef = useRef<Promise<Bill[] | undefined> | null>(null) // 백그라운드 로딩 Promise 저장
   
   const itemsPerPage = 12
 
@@ -136,11 +133,18 @@ export function useBillPageData() {
 
   // 검색/필터/카테고리 변경시 클라이언트 사이드 필터링
   useEffect(() => {
-    if (dataLoaded) {
+    if (dataLoaded && allBills.length > 0) {
       setCurrentPage(1) // 필터 변경시 첫 페이지로 리셋
       filterAndDisplayBills()
     }
-  }, [debouncedSearchTerm, filters, activeCategory, sortBy, dataLoaded, allBills])
+  }, [debouncedSearchTerm, filters, dataLoaded, allBills])
+
+  // activeCategory 변경 시에만 별도로 필터링 (백그라운드 로딩 방해하지 않음)
+  useEffect(() => {
+    if (dataLoaded && allBills.length > 0) {
+      filterAndDisplayBills()
+    }
+  }, [activeCategory])
 
   // 페이지 변경시 표시되는 데이터 업데이트
   useEffect(() => {
@@ -365,22 +369,15 @@ export function useBillPageData() {
 
   // 백그라운드에서 나머지 데이터 로드
   const loadRemainingBills = useCallback(async (initialBills: Bill[]) => {
-    if (!supabase || backgroundLoadingRef.current) return
+    if (!supabase || backgroundLoadingRef.current) {
+      console.log('🚫 백그라운드 로딩 스킵:', { supabase: !!supabase, loading: backgroundLoadingRef.current })
+      return initialBills
+    }
     
     backgroundLoadingRef.current = true
     setBackgroundLoading(true)
     setLoadingProgress(0)
-    
-    // 모바일에서 백그라운드 작업 안정성을 위한 설정
-    let isPageVisible = true
-    const handleVisibilityChange = () => {
-      isPageVisible = !document.hidden
-      console.log(`📱 페이지 가시성 변경: ${isPageVisible ? '보임' : '숨김'}`)
-    }
-    
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange)
-    }
+    console.log('🚀 백그라운드 로딩 시작 - 안전모드')
     
     try {
       console.log('🔄 백그라운드에서 나머지 데이터 로드 시작...')
@@ -448,18 +445,8 @@ export function useBillPageData() {
             
             console.log(`📈 백그라운드 로딩: ${progress}% (${allBills.length}/${totalCount})`)
             
-            // 청크 간 대기 (UI 블로킹 방지 + 모바일 안정성)
+            // 청크 간 대기 (UI 블로킹 방지)
             await new Promise(resolve => setTimeout(resolve, delayBetweenChunks))
-            
-            // 모바일에서 페이지가 숨겨진 상태가 너무 오래 지속되면 잠시 대기
-            if (isMobile && !isPageVisible) {
-              let waitCount = 0
-              while (!isPageVisible && waitCount < 10) { // 최대 10초 대기
-                console.log(`📱 페이지 숨김 상태 - 1초 대기 중... (${waitCount + 1}/10)`)
-                await new Promise(resolve => setTimeout(resolve, 1000))
-                waitCount++
-              }
-            }
             
           } catch (error) {
             retryCount++
@@ -496,11 +483,6 @@ export function useBillPageData() {
       console.error('백그라운드 로딩 실패:', error)
       return initialBills
     } finally {
-      // 이벤트 리스너 정리
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', handleVisibilityChange)
-      }
-      
       setBackgroundLoading(false)
       setLoadingProgress(100)
       backgroundLoadingRef.current = false
@@ -573,8 +555,7 @@ export function useBillPageData() {
           calculateInitialTabCounts(cachedBills, totalBillCount)
         }
         
-        // 최근 탭 데이터 생성
-        await setupRecentBills(cachedBills)
+        // 최근 탭 데이터는 recentBills에서 실시간 계산됨
         
         console.log('🎯 캐시에서 즉시 로드 완료!')
         
@@ -589,7 +570,7 @@ export function useBillPageData() {
                 setAllBills(allBills)
                                  setTotalCount(allBills.length)
                  calculateTabCounts(allBills) // 정확한 개수로 업데이트
-                 setupRecentBills(allBills)
+                 // 최근 탭 데이터는 recentBills에서 실시간 계산됨
                  console.log('📊 캐시 보완 완료 - 탭별 개수 정확히 업데이트됨')
               }
             }).catch(error => {
@@ -617,8 +598,7 @@ export function useBillPageData() {
         // 화면에 즉시 표시
         console.log('⚡ 초기 1000개로 화면 표시 시작')
         
-        // 최근 탭 데이터 생성
-        await setupRecentBills(initialBills)
+        // 최근 탭 데이터는 recentBills에서 실시간 계산됨
         
         // 4단계: 나머지 데이터가 있으면 백그라운드에서 로드
         if (totalBillCount > initialBills.length) {
@@ -626,8 +606,17 @@ export function useBillPageData() {
           
           // 모든 환경에서 동일한 백그라운드 로딩 전략
           setTimeout(() => {
+            // 이미 백그라운드 로딩이 진행 중인지 확인
+            if (backgroundLoadingPromiseRef.current) {
+              console.log('🔄 백그라운드 로딩 이미 진행 중 - 기존 Promise 사용')
+              return
+            }
+            
             console.log('🔄 백그라운드 로딩 시작 (통합 전략)')
-            loadRemainingBills(initialBills).then(allBills => {
+            const backgroundPromise = loadRemainingBills(initialBills)
+            backgroundLoadingPromiseRef.current = backgroundPromise
+            
+            backgroundPromise.then(allBills => {
               if (allBills && allBills.length > initialBills.length) {
                 console.log(`✅ 백그라운드 로딩 완료: ${allBills.length}개 (추가 ${allBills.length - initialBills.length}개)`)
                 setAllBills(allBills)
@@ -635,12 +624,13 @@ export function useBillPageData() {
                 // 탭별 개수 정확히 재계산
                 calculateTabCounts(allBills)
                 console.log('📊 백그라운드 로딩 완료 - 탭별 개수 정확히 업데이트됨')
-                // 업데이트된 데이터로 최근 탭 재생성
-                setupRecentBills(allBills)
+                // 최근 탭 데이터는 recentBills에서 실시간 계산됨
               }
             }).catch(error => {
               console.error('🚨 백그라운드 로딩 실패 (기존 데이터 유지):', error)
               // 실패해도 초기 1000개는 그대로 사용
+            }).finally(() => {
+              backgroundLoadingPromiseRef.current = null
             })
           }, 300) // 모든 환경에서 300ms 대기
         } else {
@@ -657,51 +647,73 @@ export function useBillPageData() {
     }
   }, [supabase, loadFromCache, loadInitialBills, loadRemainingBills])
 
-  // 최근 탭 데이터 설정
-  const setupRecentBills = useCallback(async (bills: Bill[]) => {
+  // allBills에서 최근 법안 데이터 실시간 계산
+  const getRecentBills = useCallback((): RecentBillsData => {
+    if (!allBills.length) {
+      return {
+        recentProposed: [],
+        recentProcessed: [],
+        recentUpdated: []
+      }
+    }
+
     const oneWeekAgo = new Date()
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
     
-    const recentProposed = bills.filter(bill => 
+    const recentProposed = allBills.filter(bill => 
       bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
     ).sort((a, b) => parseInt(b.bill_no?.replace(/\D/g, '') || '0') - parseInt(a.bill_no?.replace(/\D/g, '') || '0'))
     
-    const recentProcessed = bills.filter(bill => 
+    const recentProcessed = allBills.filter(bill => 
       bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
     ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
     
-    try {
-      const recentResponse = await fetch('/api/recent-bills')
-      if (recentResponse.ok) {
-        const recentData = await recentResponse.json()
-        const recentUpdated = recentData.recentUpdated || []
-        setRecentBills({
-          recentProposed,
-          recentProcessed,
-          recentUpdated
-        })
-        
-        // recentUpdated 개수 업데이트
-        setTabCounts(prev => ({
-          ...prev,
-          recentUpdated: recentUpdated.length
-        }))
-      } else {
-        setRecentBills({
-          recentProposed,
-          recentProcessed,
-          recentUpdated: []
-        })
-      }
-    } catch (apiError) {
-      console.warn('최근 법안 API 호출 중 오류:', apiError)
-      setRecentBills({
-        recentProposed,
-        recentProcessed,
-        recentUpdated: []
-      })
+    // recentUpdated는 별도 API가 필요하므로 빈 배열로 처리 (필요시 추가)
+    return {
+      recentProposed,
+      recentProcessed,
+      recentUpdated: []
     }
-  }, [])
+  }, [allBills])
+
+  // 실시간으로 계산된 최근 법안 데이터
+  const recentBills = getRecentBills()
+
+  // 실시간으로 계산된 탭 카운트 (allBills 기준)
+  const calculateRealtimeTabCounts = useCallback(() => {
+    if (!allBills.length) return tabCounts
+
+    const all = allBills.length
+    const pending = allBills.filter(bill => bill.pass_gubn === '계류의안').length
+    const passed = allBills.filter(bill => 
+      ['원안가결', '수정가결', '대안반영폐기', '수정안반영폐기'].includes(bill.general_result || '') &&
+      !['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+    ).length
+    const rejected = allBills.filter(bill => 
+      ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
+      ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
+    ).length
+    
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const recent = allBills.filter(bill => 
+      bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
+    ).length
+
+    return {
+      all,
+      pending,
+      passed,
+      rejected,
+      recent,
+      recentProposed: recentBills.recentProposed.length,
+      recentProcessed: recentBills.recentProcessed.length,
+      recentUpdated: recentBills.recentUpdated.length
+    }
+  }, [allBills, recentBills])
+
+  // 실시간 탭 카운트
+  const realtimeTabCounts = calculateRealtimeTabCounts()
 
   // 초기 탭별 개수 추정 (전체 개수 기준)
   const calculateInitialTabCounts = useCallback((sampleBills: Bill[], totalCount: number) => {
@@ -986,8 +998,8 @@ export function useBillPageData() {
     loadMoreRef,
     isRefreshing,
     
-    // 각 탭별 개수 state 추가
-    tabCounts,
+    // 각 탭별 개수 (실시간 계산)
+    tabCounts: realtimeTabCounts,
     currentFilteredCount,
     
     // 액션들
