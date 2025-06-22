@@ -4,10 +4,12 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { Bill, FilterState, RecentBillsData } from '@/types/bill-page'
 import { billCache } from '@/lib/bill-cache'
 import { cacheSyncManager } from '@/lib/cache-sync'
+import { useFloatingWindow } from '@/hooks/use-floating-window'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export function useBillPageData() {
   const [allBills, setAllBills] = useState<Bill[]>([]) // 전체 데이터 캐시
@@ -72,19 +74,10 @@ export function useBillPageData() {
 
   // Supabase 클라이언트 초기화
   useEffect(() => {
-    if (!mounted || typeof window === 'undefined') return
-    
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    
-    if (!supabaseUrl || !supabaseKey) {
-      setError('Supabase 연결 정보가 설정되지 않았습니다.')
-      setLoading(false)
-      return
-    }
+    if (!mounted) return
     
     try {
-      const client = createClient(supabaseUrl, supabaseKey)
+      const client = createClient()
       setSupabase(client)
     } catch {
       setError('Supabase 클라이언트 초기화 실패')

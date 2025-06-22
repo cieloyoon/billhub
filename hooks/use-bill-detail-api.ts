@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useMemo } from 'react'
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { Bill, CommissionInfo, AdditionalApiInfo } from '@/types/bill'
 import { parseCommissionXML, parseDeliberateXML, parseTransferredXML, parsePromulgationXML, parseAdditionalXML } from '@/utils/xmlParsers'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export function useBillDetailApi() {
   const [bill, setBill] = useState<Bill | null>(null)
@@ -21,15 +22,8 @@ export function useBillDetailApi() {
   const supabase = useMemo(() => {
     if (supabaseRef.current) return supabaseRef.current
     
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    
-    if (!supabaseUrl || !supabaseKey) {
-      return null
-    }
-    
     try {
-      const client = createClient(supabaseUrl, supabaseKey)
+      const client = createClient()
       supabaseRef.current = client
       return client
     } catch {

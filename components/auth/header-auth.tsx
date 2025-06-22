@@ -22,6 +22,7 @@ export function HeaderAuth() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [configured, setConfigured] = useState(false)
+  const [avatarError, setAvatarError] = useState(false)
 
   useEffect(() => {
     // Supabase 설정 확인
@@ -40,6 +41,7 @@ export function HeaderAuth() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         setUser(user)
+        setAvatarError(false) // 새 사용자일 때 에러 상태 리셋
       } catch (error) {
         console.warn('Failed to get user:', error)
         setUser(null)
@@ -55,6 +57,7 @@ export function HeaderAuth() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setUser(session?.user ?? null)
+      setAvatarError(false) // 인증 상태 변화 시 에러 상태 리셋
       setLoading(false)
     })
 
@@ -116,8 +119,9 @@ export function HeaderAuth() {
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
               <AvatarImage 
-                src={user.user_metadata?.avatar_url} 
-                alt={user.email || "User"} 
+                src={!avatarError && user.user_metadata?.avatar_url ? user.user_metadata.avatar_url : undefined}
+                alt={user.email || "User"}
+                onError={() => setAvatarError(true)}
               />
               <AvatarFallback>
                 {user.email ? getInitials(user.email) : "U"}
