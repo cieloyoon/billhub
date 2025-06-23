@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useNotifications } from '@/hooks/use-notifications'
+import { useNotifications } from '@/contexts/notification-context'
 import { NotificationItem } from './notification-item'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ interface NotificationListProps {
 
 export function NotificationList({ className = "" }: NotificationListProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all')
+  const [unreadNotifications, setUnreadNotifications] = useState<any[]>([])
   const { 
     notifications, 
     unreadCount, 
@@ -28,10 +29,29 @@ export function NotificationList({ className = "" }: NotificationListProps) {
     refreshTrigger
   } = useNotifications()
 
+  // 탭 변경 시 알림 목록 새로고침
   useEffect(() => {
     console.log('🔄 탭 변경 또는 마운트, 알림 목록 가져오기:', activeTab)
-    fetchNotifications(1, activeTab === 'unread')
-  }, [activeTab])
+    const loadData = async () => {
+      const data = await fetchNotifications(1, activeTab === 'unread')
+      if (activeTab === 'unread') {
+        setUnreadNotifications(data.notifications)
+      }
+    }
+    loadData()
+  }, [activeTab, fetchNotifications])
+
+  // 읽음 처리 후 목록 업데이트를 위한 효과
+  useEffect(() => {
+    if (activeTab === 'unread') {
+      // 읽지 않은 탭에서는 실시간으로 목록을 갱신
+      const loadUnreadData = async () => {
+        const data = await fetchNotifications(1, true)
+        setUnreadNotifications(data.notifications)
+      }
+      loadUnreadData()
+    }
+  }, [unreadCount, activeTab, fetchNotifications])
 
   // 알림 목록 변화 감지 (디버깅 목적 - 간소화)
   useEffect(() => {
@@ -156,7 +176,7 @@ export function NotificationList({ className = "" }: NotificationListProps) {
                 <div className="flex items-center justify-center py-20 px-4 min-h-[300px]">
                   <LoadingCompact message="알림 목록 불러오는 중..." />
                 </div>
-              ) : notifications.filter(n => !n.is_read).length === 0 ? (
+              ) : unreadNotifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 px-4 min-h-[300px]">
                   <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
                     <CheckCheck className="w-8 h-8 text-green-600" />
@@ -168,16 +188,14 @@ export function NotificationList({ className = "" }: NotificationListProps) {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {notifications
-                    .filter(n => !n.is_read)
-                    .map((notification) => {
-                      return (
-                        <NotificationItem
-                          key={`${notification.id}-${refreshTrigger}`}
-                          notification={notification}
-                        />
-                      )
-                    })}
+                  {unreadNotifications.map((notification) => {
+                    return (
+                      <NotificationItem
+                        key={`${notification.id}-${refreshTrigger}`}
+                        notification={notification}
+                      />
+                    )
+                  })}
                 </div>
               )}
             </ScrollArea>

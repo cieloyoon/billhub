@@ -13,6 +13,21 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    const countOnly = searchParams.get('count_only') === 'true'
+    
+    // 개수만 요청하는 경우
+    if (countOnly) {
+      const { count: unreadCount } = await supabase
+        .from('notification_history')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+
+      return NextResponse.json({
+        unreadCount: unreadCount || 0
+      })
+    }
+    
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const unreadOnly = searchParams.get('unread_only') === 'true'

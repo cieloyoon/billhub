@@ -6,7 +6,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useNotifications, type Notification } from '@/hooks/use-notifications'
+import { useNotifications, type Notification } from '@/contexts/notification-context'
 import { cn } from '@/lib/utils'
 import { Eye, ExternalLink, Clock, FileText, Trash2 } from 'lucide-react'
 

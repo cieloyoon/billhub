@@ -9,6 +9,7 @@ import { BottomNav } from "@/components/navigation/bottom-nav"
 import { DesktopNav } from "@/components/navigation/desktop-nav"
 import { FloatingWindowManager } from "@/components/floating-window-manager"
 import { FloatingWindowProvider } from "@/hooks/use-floating-window"
+import { NotificationProvider } from "@/contexts/notification-context"
 
 export const metadata: Metadata = {
   title: "Billhub",
@@ -37,7 +38,8 @@ export default function RootLayout({
         <FloatingWindowProvider>
           <BillSyncProvider>
             <CacheSyncProvider>
-              <div className="relative flex min-h-screen flex-col">
+              <NotificationProvider>
+                <div className="relative flex min-h-screen flex-col">
               <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="mx-auto flex h-14 max-w-screen-2xl items-center px-4">
                   {/* Mobile logo (left) */}
@@ -71,7 +73,8 @@ export default function RootLayout({
               </main>
               <BottomNav />
               <FloatingWindowManager />
-              </div>
+                </div>
+              </NotificationProvider>
             </CacheSyncProvider>
           </BillSyncProvider>
         </FloatingWindowProvider>

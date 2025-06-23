@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useNotifications, type Notification } from '@/hooks/use-notifications'
+import { useNotifications, type Notification } from '@/contexts/notification-context'
 
 export function NotificationDropdown() {
   const { notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead } = useNotifications()
