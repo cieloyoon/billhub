@@ -173,12 +173,12 @@ class CacheSyncManager {
           .then(({ data, error }) => {
             if (error) {
               console.error(`❌ 청크 ${currentOffset}-${currentOffset + currentLimit} 실패:`, error)
-              return []
+              return [] as Bill[]
             }
-            const bills = data || []
+            const bills = (data || []) as Bill[]
             console.log(`⚡ 청크 완료: ${bills.length}개 (${currentOffset}-${currentOffset + currentLimit})`)
             return bills
-          })
+          }) as Promise<Bill[]>
         
         chunkPromises.push(chunkPromise)
         offset += currentLimit
