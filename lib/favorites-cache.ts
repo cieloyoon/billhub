@@ -13,7 +13,7 @@ interface FavoriteCacheData {
 
 class FavoritesCacheManager {
   private dbName = 'lawpage-favorites'
-  private dbVersion = 1
+  private dbVersion = 2  // 버전 업
   private storeName = 'favorites'
   private cacheExpiry = 30 * 60 * 1000 // 30분
   private db: IDBDatabase | null = null
@@ -24,7 +24,11 @@ class FavoritesCacheManager {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion)
 
-      request.onerror = () => reject(request.error)
+      request.onerror = () => {
+        console.error('IndexedDB 초기화 실패:', request.error)
+        reject(request.error)
+      }
+      
       request.onsuccess = () => {
         this.db = request.result
         resolve(request.result)
@@ -33,10 +37,20 @@ class FavoritesCacheManager {
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
 
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          const store = db.createObjectStore(this.storeName, { keyPath: 'userId' })
-          store.createIndex('lastUpdated', 'lastUpdated', { unique: false })
+        // 기존 스토어 삭제 (필요시)
+        if (db.objectStoreNames.contains(this.storeName)) {
+          db.deleteObjectStore(this.storeName)
         }
+
+        // 스토어 재생성
+        const store = db.createObjectStore(this.storeName, { keyPath: 'userId' })
+        store.createIndex('lastUpdated', 'lastUpdated', { unique: false })
+
+        console.log('즐겨찾기 IndexedDB 스키마 업그레이드 완료')
+      }
+
+      request.onblocked = () => {
+        console.warn('IndexedDB 업그레이드가 차단됨. 다른 탭을 닫아주세요.')
       }
     })
   }

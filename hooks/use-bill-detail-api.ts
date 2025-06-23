@@ -67,7 +67,7 @@ export function useBillDetailApi() {
       if (!isBackground) {
         setAdditionalLoading(true)
       }
-      console.log(`${isBackground ? '🔄 백그라운드' : '⚡'} 추가 API들 호출 시작:`, billId)
+      console.log(`${isBackground ? '🔄 백그라운드' : '⚡'} 추가 API들 병렬 호출 시작:`, billId)
       
       const apis = [
         { name: 'deliberate', url: `/api/bill-deliberate?bill_id=${billId}` },
@@ -81,13 +81,22 @@ export function useBillDetailApi() {
       let completedCount = 0
       const totalCount = apis.length
 
+      // 모든 API를 완전히 병렬로 호출하여 최대 성능 확보
       const promises = apis.map(async (api) => {
         try {
+          console.log(`🚀 API 호출 시작: ${api.name}`)
+          const startTime = Date.now()
+          
           const response = await fetch(api.url)
+          
+          const endTime = Date.now()
+          console.log(`⚡ API 응답: ${api.name} (${endTime - startTime}ms)`)
+          
           if (response.ok) {
             const data = await response.text()
             rawResults[api.name] = data
             
+            // 파싱도 병렬로 진행
             switch (api.name) {
               case 'deliberate':
                 results.deliberate = parseDeliberateXML(data)
@@ -104,28 +113,32 @@ export function useBillDetailApi() {
               default:
                 break
             }
+            console.log(`✅ 파싱 완료: ${api.name}`)
           } else {
             results[api.name as keyof AdditionalApiInfo] = { error: `${response.status} ${response.statusText}` }
             rawResults[api.name] = `Error: ${response.status} ${response.statusText}`
+            console.log(`❌ API 에러: ${api.name} - ${response.status}`)
           }
         } catch (error) {
           results[api.name as keyof AdditionalApiInfo] = { error: error instanceof Error ? error.message : '알 수 없는 오류' }
           rawResults[api.name] = `Error: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
+          console.error(`💥 API 예외: ${api.name}`, error)
         } finally {
           completedCount++
           if (isBackground) {
             const progress = Math.round((completedCount / totalCount) * 100)
             setLoadingProgress(progress)
-            console.log(`📈 백그라운드 API 로딩: ${progress}% (${completedCount}/${totalCount})`)
+            console.log(`📈 병렬 API 진행률: ${progress}% (${completedCount}/${totalCount})`)
           }
         }
       })
 
+      // 모든 API 병렬 처리 완료 대기
       await Promise.allSettled(promises)
 
       setAdditionalInfo(results)
       setRawApiData(rawResults)
-      console.log(`✅ 추가 API들 로딩 완료 (${isBackground ? '백그라운드' : '일반'})`)
+      console.log(`🎉 모든 추가 API 병렬 로딩 완료 (${isBackground ? '백그라운드' : '일반'})`)
     } catch (err) {
       console.error('Error fetching additional APIs:', err)
     } finally {

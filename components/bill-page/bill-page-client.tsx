@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useState } from 'react'
@@ -15,6 +16,32 @@ import { BillFilterSheet } from '@/components/bill-page/bill-filter-sheet'
 import { BillCategoryTabs } from '@/components/bill-page/bill-category-tabs'
 import { BillGrid } from '@/components/bill-page/bill-grid'
 import { RecentBillsTabs } from '@/components/bill-page/recent-bills-tabs'
+
+// 전역 캐시 사용 예시:
+// import { useGlobalBillData } from '@/hooks/use-bill-page-data'
+// 
+// function AnyOtherPage() {
+//   const { bills, loading, error, totalCount, recentUpdated, refresh } = useGlobalBillData()
+//   
+//   // 이미 로드된 전역 데이터를 즉시 사용 가능
+//   // /bill, /bill/mybill, /notifications 등 어떤 페이지에서든 동일하게 작동
+//   // bills: 전체 법안 데이터, recentUpdated: 최근 진행 단계 변경 의안
+//   
+//   return (
+//     <div>
+//       {loading ? '로딩 중...' : `${totalCount}개 법안 데이터 사용 가능`}
+//       <div>최근 진행 단계 변경: {recentUpdated?.length || 0}개</div>
+//       {bills?.slice(0, 10).map(bill => (
+//         <div key={bill.bill_id}>{bill.bill_name}</div>
+//       ))}
+//       {recentUpdated?.slice(0, 5).map(item => (
+//         <div key={item.bill_id}>
+//           {item.bills.bill_name}: {item.old_value} → {item.new_value}
+//         </div>
+//       ))}
+//     </div>
+//   )
+// }
 
 export default function BillPageClient() {
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)

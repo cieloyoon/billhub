@@ -42,6 +42,7 @@ export function useBillPageData() {
   const [backgroundLoading, setBackgroundLoading] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState(0)
   const [cacheHit, setCacheHit] = useState(false)
+  const [sessionDataLoaded, setSessionDataLoaded] = useState(false) // 세션 내 데이터 로드 상태
   
   // 각 탭별 개수 state 추가
   const [tabCounts, setTabCounts] = useState({
@@ -112,6 +113,7 @@ export function useBillPageData() {
       // 먼저 모든 상태 초기화
       setLoading(true)
       setDataLoaded(false)
+      setSessionDataLoaded(false) // 세션 상태도 초기화
       setAllBills([])
       setFilteredBills([])
       setDisplayedBills([])
@@ -130,16 +132,65 @@ export function useBillPageData() {
     }
   }, [mounted, supabase])
 
-  // 초기 데이터 로딩 (전체 데이터 한 번만) + 강제 새로고침 처리
+  // 초기 데이터 로딩 (전역 캐시 시스템 사용)
   useEffect(() => {
-    if (supabase && mounted && (!dataLoaded || shouldForceRefresh)) {
+    if (supabase && mounted && (!sessionDataLoaded || shouldForceRefresh)) {
       if (shouldForceRefresh) {
         console.log('🔄 강제 새로고침 - 데이터 재로드 시작')
         setShouldForceRefresh(false)
+        setSessionDataLoaded(false) // 강제 새로고침시 세션 상태 리셋
+        loadGlobalDataFromCache(true) // 강제 새로고침
+      } else {
+        // 세션 내에서 이미 로드된 경우 스킵
+        if (sessionDataLoaded && !shouldForceRefresh) {
+          console.log('✨ 세션 내 데이터 재사용 - 로딩 스킵')
+          return
+        }
+        
+        loadGlobalDataFromCache(false) // 일반 로드
       }
-      loadAllBills()
     }
-  }, [supabase, mounted, dataLoaded, shouldForceRefresh])
+  }, [supabase, mounted, sessionDataLoaded, shouldForceRefresh])
+
+  // 전역 캐시에서 데이터 로드
+  const loadGlobalDataFromCache = useCallback(async (force = false) => {
+    if (!supabase) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      console.log('🌐 전역 캐시에서 데이터 로드 시작...')
+      
+      // 전역 캐시 시스템에서 데이터 가져오기
+      const globalBills = force 
+        ? await cacheSyncManager.refreshGlobalData()
+        : await cacheSyncManager.getGlobalData()
+      
+      if (globalBills && globalBills.length > 0) {
+        console.log(`✅ 전역 캐시에서 ${globalBills.length}개 데이터 로드 완료`)
+        
+        setAllBills(globalBills)
+        setTotalCount(globalBills.length)
+        setDataLoaded(true)
+        setSessionDataLoaded(true)
+        setCacheHit(true)
+        calculateTabCounts(globalBills)
+        
+        console.log('🎉 전역 캐시 데이터 적용 완료')
+      } else {
+        // 전역 캐시 실패시 기존 로직으로 폴백
+        console.log('⚠️ 전역 캐시 실패 - 기존 로직으로 폴백')
+        await loadAllBills()
+      }
+      
+    } catch (error) {
+      console.error('❌ 전역 캐시 로드 실패:', error)
+      setError(error instanceof Error ? error.message : '데이터 로딩에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase, cacheSyncManager])
 
   // 검색/필터/카테고리 변경시 클라이언트 사이드 필터링
   useEffect(() => {
@@ -351,155 +402,187 @@ export function useBillPageData() {
     }
   }, [])
 
-  // 최신 1000개만 빠르게 로드 (화면 즉시 표시용)
+  // 스마트 초기 로딩 (점진적 로딩으로 UX 개선)
   const loadInitialBills = useCallback(async (): Promise<Bill[]> => {
     if (!supabase) return []
     
-    console.log('🚀 최신 1000개 법안 우선 로드 중...')
+    console.log('🚀 스마트 초기 로딩 시작 - 전체 데이터 대응')
     
-    const { data, error, count } = await supabase
+    // 1단계: 총 개수 먼저 확인
+    const { count } = await supabase
       .from('bills')
-      .select('*', { count: 'exact' })
+      .select('*', { count: 'exact', head: true })
+    
+    const totalCount = count || 0
+    console.log(`📊 전체 법안 개수: ${totalCount}개`)
+    setTotalCount(totalCount)
+    
+    // 2단계: 환경에 따른 초기 로딩 크기 결정
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    const isSlowConnection = typeof navigator !== 'undefined' && 
+      (navigator as any).connection?.effectiveType === 'slow-2g' || 
+      (navigator as any).connection?.effectiveType === '2g'
+    
+    // 초기 표시용 데이터 크기 (UX 최적화)
+    let initialSize = 2000 // 기본값
+    if (isMobile) {
+      initialSize = isSlowConnection ? 500 : 1000 // 모바일: 500-1000개
+    } else {
+      initialSize = totalCount <= 5000 ? totalCount : 3000 // 데스크탑: 최대 3000개
+    }
+    
+    console.log(`📱 환경: ${isMobile ? '모바일' : '데스크탑'}, 초기로딩: ${initialSize}개, 전체: ${totalCount}개`)
+    
+    // 3단계: 초기 데이터 로드
+    const { data, error } = await supabase
+      .from('bills')
+      .select('*')
       .order('propose_dt', { ascending: false, nullsFirst: false })
       .order('bill_no', { ascending: false, nullsFirst: false })
-      .limit(1000)
+      .limit(initialSize)
 
     if (error) {
       throw new Error(`초기 데이터 로딩 오류: ${error.message}`)
     }
 
     const bills = data || []
-    const totalCount = count || 0
+    console.log(`✅ 초기 ${bills.length}개 법안 로드 완료 (전체: ${totalCount}개 중 ${Math.round(bills.length/totalCount*100)}%)`)
     
-    console.log(`✅ 초기 ${bills.length}개 법안 로드 완료 (전체: ${totalCount}개)`)
-    
-    setTotalCount(totalCount)
     return bills
   }, [supabase])
 
-  // 백그라운드에서 나머지 데이터 로드
-  const loadRemainingBills = useCallback(async (initialBills: Bill[]) => {
-    if (!supabase || backgroundLoadingRef.current) {
-      console.log('🚫 백그라운드 로딩 스킵:', { supabase: !!supabase, loading: backgroundLoadingRef.current })
-      return initialBills
-    }
+  // 슈퍼 병렬처리로 완전한 데이터 로딩 (Supabase 1000개 제한 최적화)
+  const loadCompleteDataParallel = useCallback(async (totalCount: number): Promise<Bill[]> => {
+    if (!supabase) return []
     
-    backgroundLoadingRef.current = true
     setBackgroundLoading(true)
     setLoadingProgress(0)
-    console.log('🚀 백그라운드 로딩 시작 - 안전모드')
+    console.log('🚀 Supabase 1000개 제한 최적화 병렬 로딩 시작')
     
     try {
-      console.log('🔄 백그라운드에서 나머지 데이터 로드 시작...')
-      
-      // 총 개수 확인
-      const { count } = await supabase
-        .from('bills')
-        .select('*', { count: 'exact', head: true })
-      
-      const totalCount = count || 0
-      const remainingCount = totalCount - initialBills.length
-      
-      if (remainingCount <= 0) {
-        console.log('🎉 모든 데이터가 이미 로드됨')
-        await billCache.setCachedBills(initialBills, totalCount)
-        return initialBills
-      }
-      
-      console.log(`📦 추가로 ${remainingCount}개 법안 로드 예정`)
-      
-      // 빠른 백그라운드 로딩 설정
+      // Supabase 제한에 맞춘 최적 설정
+      const SUPABASE_LIMIT = 1000 // Supabase 최대 제한
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-      const chunkSize = 1000 // 빠른 로딩을 위해 1000개씩
-      const delayBetweenChunks = isMobile ? 150 : 50 // 더 짧은 대기시간
-      const maxRetries = isMobile ? 5 : 3 // 모바일에서 더 많은 재시도
+      const maxConcurrentChunks = isMobile ? 4 : 6 // 6개 청크 병렬 처리
+      const delayBetweenBatches = isMobile ? 100 : 50 // 적절한 대기시간
       
-      console.log(`📱 환경: ${isMobile ? '모바일' : '데스크탑'}, 청크 크기: ${chunkSize}, 대기시간: ${delayBetweenChunks}ms, 재시도: ${maxRetries}회`)
+      console.log(`🏭 최적화 모드 - 청크크기: ${SUPABASE_LIMIT}개, 동시처리: ${maxConcurrentChunks}개, 총목표: ${totalCount}개`)
       
-      let allBills = [...initialBills]
-      let offset = initialBills.length // 초기 1000개 다음부터 시작
+      const allBills: Bill[] = []
+      let processedCount = 0
+      let offset = 0
+      const startTime = Date.now()
       
-      while (allBills.length < totalCount) {
-        let retryCount = 0
-        let chunkSuccess = false
+      // 전체 로딩을 1000개씩 병렬 처리
+      while (offset < totalCount) {
+        const chunkPromises: Promise<Bill[]>[] = []
         
-        while (retryCount < maxRetries && !chunkSuccess) {
-          try {
-            console.log(`📄 청크 로딩: ${offset}~${offset + chunkSize - 1} [시도 ${retryCount + 1}/${maxRetries}]`)
-            
-            const { data, error: fetchError } = await supabase
-              .from('bills')
-              .select('*')
-              .order('propose_dt', { ascending: false, nullsFirst: false })
-              .order('bill_no', { ascending: false, nullsFirst: false })
-              .range(offset, offset + chunkSize - 1)
-
-            if (fetchError) {
-              throw fetchError
-            }
-
-            const bills = data || []
-            if (bills.length === 0) {
-              console.log('📄 더 이상 로드할 데이터가 없음')
-              chunkSuccess = true
-              break
-            }
-            
-            allBills = [...allBills, ...bills]
-            offset += bills.length
-            chunkSuccess = true
-            
-            // 진행률 업데이트
-            const progress = Math.min(Math.round((allBills.length / totalCount) * 100), 100)
-            setLoadingProgress(progress)
-            
-            console.log(`📈 백그라운드 로딩: ${progress}% (${allBills.length}/${totalCount})`)
-            
-            // 청크 간 대기 (UI 블로킹 방지)
-            await new Promise(resolve => setTimeout(resolve, delayBetweenChunks))
-            
-          } catch (error) {
-            retryCount++
-            console.error(`청크 로딩 실패 (시도 ${retryCount}/${maxRetries}):`, error)
-            
-            if (retryCount < maxRetries) {
-              // 재시도 전 대기 시간 (모바일에서 더 긴 대기)
-              const baseWaitTime = isMobile ? 2000 : 1000
-              const waitTime = Math.min(baseWaitTime * retryCount, isMobile ? 8000 : 5000)
-              console.log(`⏳ ${waitTime}ms 후 재시도... (${isMobile ? '모바일' : '데스크탑'} 모드)`)
-              await new Promise(resolve => setTimeout(resolve, waitTime))
-            }
-          }
+        // 4개(또는 3개) 청크를 동시에 병렬 처리
+        for (let i = 0; i < maxConcurrentChunks && offset < totalCount; i++) {
+          const currentOffset = offset
+          const currentLimit = Math.min(SUPABASE_LIMIT, totalCount - offset)
+          
+          console.log(`📦 청크 ${Math.floor(offset/SUPABASE_LIMIT) + 1} 준비: ${currentOffset}~${currentOffset + currentLimit - 1}`)
+          
+          const chunkPromise = supabase
+            .from('bills')
+            .select('*')
+            .order('propose_dt', { ascending: false, nullsFirst: false })
+            .order('bill_no', { ascending: false, nullsFirst: false })
+            .range(currentOffset, currentOffset + currentLimit - 1)
+            .then(({ data, error }) => {
+              if (error) {
+                console.error(`❌ 청크 ${currentOffset}-${currentOffset + currentLimit} 실패:`, error)
+                return []
+              }
+              const bills = data || []
+              const chunkNum = Math.floor(currentOffset/SUPABASE_LIMIT) + 1
+              console.log(`⚡ 청크 ${chunkNum} 완료: ${bills.length}개 로드 (${currentOffset}-${currentOffset + currentLimit})`)
+              return bills
+            })
+          
+          chunkPromises.push(chunkPromise)
+          offset += currentLimit
         }
         
-        if (!chunkSuccess) {
-          console.error(`청크 로딩 최종 실패 - 백그라운드 로딩 중단 (현재까지 ${allBills.length}개 로드됨)`)
-          break
+        // 현재 배치의 모든 청크 완료 대기
+        console.log(`🔄 배치 실행: ${chunkPromises.length}개 청크 병렬 처리 중...`)
+        const batchStartTime = Date.now()
+        
+        const batchResults = await Promise.allSettled(chunkPromises)
+        
+        // 성공한 청크들을 병합
+        let batchLoadedCount = 0
+        batchResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            allBills.push(...result.value)
+            batchLoadedCount += result.value.length
+            processedCount += result.value.length
+          } else {
+            console.error(`💥 배치 청크 ${index} 실패:`, result.reason)
+          }
+        })
+        
+        const batchDuration = Date.now() - batchStartTime
+        const batchRate = batchLoadedCount / (batchDuration / 1000)
+        
+        // 진행률 업데이트
+        const progress = Math.min(Math.round((processedCount / totalCount) * 100), 100)
+        setLoadingProgress(progress)
+        
+        const totalDuration = Date.now() - startTime
+        const overallRate = processedCount / (totalDuration / 1000)
+        
+        console.log(`📈 배치 완료: ${batchLoadedCount}개 (${Math.round(batchRate)}개/초), 전체: ${progress}% (${allBills.length}/${totalCount}개, ${Math.round(overallRate)}개/초)`)
+        
+        // 실시간 UI 업데이트
+        if (allBills.length > 0) {
+          setAllBills([...allBills])
+        }
+        
+        // 배치 간 짧은 대기 (서버 부하 방지)
+        if (offset < totalCount && delayBetweenBatches > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches))
+        }
+        
+        // 중간 메모리 체크 (5000개마다)
+        if (allBills.length > 0 && allBills.length % 5000 === 0) {
+          console.log(`🧠 메모리 체크포인트: ${allBills.length}개 로드됨`)
         }
       }
-
-      console.log(`✅ 백그라운드 로딩 완료: ${allBills.length}개`)
       
-      // 캐시에 저장
-      await billCache.setCachedBills(allBills, allBills.length)
+      const totalDuration = Date.now() - startTime
+      const finalRate = allBills.length / (totalDuration / 1000)
+      console.log(`🎉 전체 로딩 완료: ${allBills.length}/${totalCount}개 (평균 ${Math.round(finalRate)}개/초, ${Math.round(totalDuration/1000)}초 소요)`)
       
-      // 전체 데이터로 업데이트
-      setAllBills(allBills)
-      setTotalCount(allBills.length)
+      // 최종 데이터 정렬
+      console.log('🔄 최종 데이터 정렬 중...')
+      const sortedBills = allBills.sort((a, b) => {
+        // 발의일 우선 정렬
+        const aDate = new Date(a.propose_dt || '').getTime()
+        const bDate = new Date(b.propose_dt || '').getTime()
+        if (bDate !== aDate) return bDate - aDate
+        
+        // 발의일이 같으면 법안번호로 정렬
+        const aNum = parseInt(a.bill_no?.replace(/\D/g, '') || '0')
+        const bNum = parseInt(b.bill_no?.replace(/\D/g, '') || '0')
+        return bNum - aNum
+      })
       
-      return allBills
+      console.log(`✅ 정렬 완료: ${sortedBills.length}개`)
+      
+      return sortedBills
       
     } catch (error) {
-      console.error('백그라운드 로딩 실패:', error)
-      return initialBills
+      console.error('💥 최적화 병렬 로딩 실패:', error)
+      return []
     } finally {
       setBackgroundLoading(false)
       setLoadingProgress(100)
-      backgroundLoadingRef.current = false
     }
   }, [supabase])
 
-  // 통합 데이터 로딩 전략 (모든 환경에서 동일)
+  // 통합 데이터 로딩 전략 (강제 전체로딩 + 슈퍼 병렬처리)
   const loadAllBills = useCallback(async () => {
     if (!supabase) return
     
@@ -508,154 +591,43 @@ export function useBillPageData() {
     
     try {
       // 1단계: 전체 개수 확인
-      const { count } = await supabase
-        .from('bills')
-        .select('*', { count: 'exact', head: true })
-      
+      const { count } = await supabase.from('bills').select('*', { count: 'exact', head: true })
       const totalBillCount = count || 0
-      console.log(`📊 전체 법안 개수: ${totalBillCount}개`)
+      console.log(`📊 실제 전체 법안 개수: ${totalBillCount}개`)
+      setTotalCount(totalBillCount)
       
-      // 2단계: 캐시 확인 및 동기화 체크
-      const cachedBills = await loadFromCache()
-      let shouldUseCache = false
+      // 2단계: 캐시는 참고만 하고 항상 최신 데이터로 강제 전체 로딩
+      console.log('🔥 캐시 무시하고 강제 전체 로딩 모드 시작!')
       
-      if (cachedBills && cachedBills.length > 0) {
-        // 캐시 신선도 체크 - 최신 법안과 비교
+      // 3단계: 슈퍼 병렬처리로 전체 데이터 로딩
+      const allBills = await loadCompleteDataParallel(totalBillCount)
+      
+      if (allBills && allBills.length > 0) {
+        console.log(`🎉 전체 데이터 로딩 성공: ${allBills.length}/${totalBillCount}개`)
+        setAllBills(allBills)
+        setTotalCount(Math.max(allBills.length, totalBillCount))
+        setDataLoaded(true)
+        setSessionDataLoaded(true) // 세션 내 로드 완료 상태 설정
+        calculateTabCounts(allBills)
+        
+        // 전체 데이터를 캐시에 저장
         try {
-          const { data: latestBill } = await supabase
-            .from('bills')
-            .select('updated_at, propose_dt, bill_no')
-            .order('updated_at', { ascending: false, nullsFirst: false })
-            .limit(1)
-            .single()
-          
-          const cacheMetadata = await billCache.getMetadata()
-          
-          if (latestBill && cacheMetadata) {
-            const latestUpdate = new Date(latestBill.updated_at).getTime()
-            const cacheTime = cacheMetadata.lastUpdated
-            const timeDiff = latestUpdate - cacheTime
-            
-            // 캐시가 최신 업데이트보다 새롭거나 1시간 이내면 사용
-            if (timeDiff <= 60 * 60 * 1000) { // 1시간
-              shouldUseCache = true
-              console.log('✅ 캐시가 최신 상태 - 캐시 사용')
-            } else {
-              console.log(`🔄 캐시가 오래됨 (${Math.round(timeDiff / (60 * 1000))}분) - 새로 로드`)
-              await billCache.clearCache()
-            }
-          }
-        } catch (syncError) {
-          console.warn('캐시 동기화 체크 실패, 캐시 사용:', syncError)
-          shouldUseCache = true // 체크 실패시에도 캐시 사용
+          await billCache.setCachedBills(allBills, allBills.length)
+          console.log('💾 전체 데이터 캐시 저장 완료')
+        } catch (cacheError) {
+          console.error('캐시 저장 실패 (무시):', cacheError)
         }
+      } else {
+        throw new Error('전체 데이터 로딩 실패')
       }
       
-      if (shouldUseCache && cachedBills) {
-        // 캐시 사용: 즉시 화면 표시
-        setAllBills(cachedBills)
-        setTotalCount(Math.max(cachedBills.length, totalBillCount)) // 실제 전체 개수 우선
-        setDataLoaded(true)
-        setLoading(false)
-        
-        // 탭별 개수 계산 (캐시가 전체라면 정확히, 아니면 추정)
-        if (cachedBills.length >= totalBillCount * 0.95) { // 95% 이상이면 거의 전체
-          calculateTabCounts(cachedBills)
-        } else {
-          calculateInitialTabCounts(cachedBills, totalBillCount)
-        }
-        
-        // 최근 탭 데이터는 recentBills에서 실시간 계산됨
-        
-        console.log('🎯 캐시에서 즉시 로드 완료!')
-        
-        // 백그라운드에서 데이터 개수 확인 (캐시가 전체 데이터보다 적을 수 있음)
-        if (totalBillCount > cachedBills.length) {
-          console.log(`🔄 캐시 데이터 부족 감지: ${cachedBills.length}/${totalBillCount} - 백그라운드 보완 로딩`)
-          
-          setTimeout(() => {
-            loadRemainingBills(cachedBills).then(allBills => {
-              if (allBills && allBills.length > cachedBills.length) {
-                console.log(`✅ 캐시 보완 완료: ${allBills.length}개`)
-                setAllBills(allBills)
-                                 setTotalCount(allBills.length)
-                 calculateTabCounts(allBills) // 정확한 개수로 업데이트
-                 // 최근 탭 데이터는 recentBills에서 실시간 계산됨
-                 console.log('📊 캐시 보완 완료 - 탭별 개수 정확히 업데이트됨')
-              }
-            }).catch(error => {
-              console.error('🚨 캐시 보완 실패 (기존 캐시 유지):', error)
-            })
-          }, 1000) // 캐시 표시 후 1초 뒤 보완
-        }
-        
-        return
-      }
-      
-      // 3단계: 모든 환경에서 동일한 전략 - 최신 1000개 우선 로드
-      console.log('⚡ 통합 로딩 전략: 최신 1000개 우선')
-      const initialBills = await loadInitialBills()
-      
-      if (initialBills.length > 0) {
-        setAllBills(initialBills)
-        setTotalCount(totalBillCount) // 실제 전체 개수 먼저 설정
-        setDataLoaded(true)
-        setLoading(false)
-        
-        // 탭별 개수 계산 (전체 개수 기준으로 추정)
-        calculateInitialTabCounts(initialBills, totalBillCount)
-        
-        // 화면에 즉시 표시
-        console.log('⚡ 초기 1000개로 화면 표시 시작')
-        
-        // 최근 탭 데이터는 recentBills에서 실시간 계산됨
-        
-        // 4단계: 나머지 데이터가 있으면 백그라운드에서 로드
-        if (totalBillCount > initialBills.length) {
-          console.log(`🔄 백그라운드 로딩 예정: ${totalBillCount - initialBills.length}개 추가`)
-          
-          // 모든 환경에서 동일한 백그라운드 로딩 전략
-          setTimeout(() => {
-            // 이미 백그라운드 로딩이 진행 중인지 확인
-            if (backgroundLoadingPromiseRef.current) {
-              console.log('🔄 백그라운드 로딩 이미 진행 중 - 기존 Promise 사용')
-              return
-            }
-            
-            console.log('🔄 백그라운드 로딩 시작 (통합 전략)')
-            const backgroundPromise = loadRemainingBills(initialBills)
-            backgroundLoadingPromiseRef.current = backgroundPromise
-            
-            backgroundPromise.then(allBills => {
-              if (allBills && allBills.length > initialBills.length) {
-                console.log(`✅ 백그라운드 로딩 완료: ${allBills.length}개 (추가 ${allBills.length - initialBills.length}개)`)
-                setAllBills(allBills)
-                setTotalCount(allBills.length)
-                // 탭별 개수 정확히 재계산
-                calculateTabCounts(allBills)
-                console.log('📊 백그라운드 로딩 완료 - 탭별 개수 정확히 업데이트됨')
-                // 최근 탭 데이터는 recentBills에서 실시간 계산됨
-              }
-            }).catch(error => {
-              console.error('🚨 백그라운드 로딩 실패 (기존 데이터 유지):', error)
-              // 실패해도 초기 1000개는 그대로 사용
-            }).finally(() => {
-              backgroundLoadingPromiseRef.current = null
-            })
-          }, 300) // 모든 환경에서 300ms 대기
-        } else {
-          console.log('🎉 모든 데이터가 초기 로딩에 포함됨')
-          // 전체 데이터를 캐시에 저장
-          await billCache.setCachedBills(initialBills, totalBillCount)
-        }
-      }
-      
-    } catch (err) {
-      console.error('❌ 데이터 로딩 실패:', err)
-      setError(err instanceof Error ? err.message : '데이터를 불러오는데 실패했습니다.')
+    } catch (error) {
+      console.error('❌ 전체 로딩 실패:', error)
+      setError(error instanceof Error ? error.message : '데이터 로딩에 실패했습니다.')
+    } finally {
       setLoading(false)
     }
-  }, [supabase, loadFromCache, loadInitialBills, loadRemainingBills])
+  }, [supabase, loadCompleteDataParallel])
 
   // 최근 진행 단계 변경 데이터 로드
   const loadRecentUpdated = useCallback(async () => {
@@ -663,38 +635,17 @@ export function useBillPageData() {
 
     setLoadingRecentUpdated(true)
     try {
-      const oneWeekAgo = new Date()
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-
-      const { data, error } = await supabase
-        .from('bill_history')
-        .select(`
-          bill_id, 
-          bill_no, 
-          bill_name, 
-          tracked_at,
-          old_value,
-          new_value,
-          bills!inner(*)
-        `)
-        .eq('change_type', 'stage_changed')
-        .gte('tracked_at', oneWeekAgo.toISOString())
-        .order('tracked_at', { ascending: false })
-        .order('bill_no', { ascending: false })
-
-      if (error) throw error
-
-      // 타입 안전하게 변환
-      const typedData = (data || []).map(item => ({
-        bill_id: item.bill_id,
-        tracked_at: item.tracked_at,
-        old_value: item.old_value,
-        new_value: item.new_value,
-        bills: Array.isArray(item.bills) ? item.bills[0] : item.bills
-      }))
-
-      setRecentUpdatedData(typedData)
-      console.log(`🔄 최근 진행 단계 변경 의안 로드 완료: ${typedData.length}개`)
+      console.log('🔄 전역 캐시에서 최근 진행 단계 변경 데이터 로드...')
+      
+      // 전역 캐시 시스템 사용
+      const recentUpdatedData = await cacheSyncManager.getRecentUpdatedData()
+      
+      if (recentUpdatedData) {
+        setRecentUpdatedData(recentUpdatedData)
+        console.log(`✅ 전역 캐시에서 최근 진행 단계 변경 데이터 로드 완료: ${recentUpdatedData.length}개`)
+      } else {
+        setRecentUpdatedData([])
+      }
     } catch (error) {
       console.error('최근 진행 단계 변경 데이터 로드 실패:', error)
       setRecentUpdatedData([])
@@ -1018,6 +969,7 @@ export function useBillPageData() {
       // 상태 직접 설정 (자동으로 useEffect가 트리거됨)
       setLoading(true)
       setDataLoaded(false)
+      setSessionDataLoaded(false) // 세션 상태도 초기화
       setAllBills([])
       setFilteredBills([])
       setDisplayedBills([])
@@ -1048,10 +1000,10 @@ export function useBillPageData() {
     mounted,
     searchTerm,
     debouncedSearchTerm,
-          activeCategory,
-      recentSubTab,
-      recentBills,
-      viewMode,
+    activeCategory,
+    recentSubTab,
+    recentBills,
+    viewMode,
     filters,
     currentPage,
     hasMore,
@@ -1079,5 +1031,59 @@ export function useBillPageData() {
     handleManualRefresh,
     clearCache: () => billCache.clearCache(),
     getCacheStats: () => billCache.getCacheStats()
+  }
+}
+
+// 전역 캐시 데이터를 사용하는 간단한 훅
+export function useGlobalBillData() {
+  const [bills, setBills] = useState<Bill[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [totalCount, setTotalCount] = useState(0)
+  const [recentUpdated, setRecentUpdated] = useState<Array<{
+    bill_id: string
+    tracked_at: string
+    old_value: string
+    new_value: string
+    bills: Bill
+  }> | null>(null)
+  
+  useEffect(() => {
+    // 전역 캐시 상태 구독
+    const unsubscribe = cacheSyncManager.subscribeToGlobalData((state) => {
+      setBills(state.bills)
+      setLoading(state.isLoading)
+      setError(state.error)
+      setTotalCount(state.totalCount)
+      setRecentUpdated(state.recentUpdated)
+    })
+    
+    // 데이터가 없으면 로드 시작
+    if (!bills) {
+      cacheSyncManager.getGlobalData()
+    }
+    
+    // 최근 진행 단계 변경 데이터도 로드
+    if (!recentUpdated) {
+      cacheSyncManager.getRecentUpdatedData()
+    }
+    
+    return unsubscribe
+  }, [])
+  
+  // 강제 새로고침 함수
+  const refresh = useCallback(async () => {
+    const billsResult = await cacheSyncManager.refreshGlobalData()
+    const recentUpdatedResult = await cacheSyncManager.loadRecentUpdatedData(true)
+    return { bills: billsResult, recentUpdated: recentUpdatedResult }
+  }, [])
+  
+  return {
+    bills,
+    loading,
+    error,
+    totalCount,
+    recentUpdated,
+    refresh
   }
 }

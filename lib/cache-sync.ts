@@ -2,6 +2,24 @@ import { billCache } from './bill-cache'
 import { favoritesCache } from './favorites-cache'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import type { Bill } from '@/types/bill-page'
+
+// 전역 데이터 상태 관리
+interface GlobalDataState {
+  bills: Bill[] | null
+  totalCount: number
+  lastLoaded: number
+  isLoading: boolean
+  error: string | null
+  recentUpdated: Array<{
+    bill_id: string
+    tracked_at: string
+    old_value: string
+    new_value: string
+    bills: Bill
+  }> | null
+  recentUpdatedLastLoaded: number
+}
 
 class CacheSyncManager {
   private supabase = createClient()
@@ -9,6 +27,292 @@ class CacheSyncManager {
   private lastSyncTime: number = 0
   private cleanupListeners: (() => void) | null = null
   private forceRefreshCallbacks: Set<() => void> = new Set()
+  
+  // 전역 데이터 상태
+  private globalDataState: GlobalDataState = {
+    bills: null,
+    totalCount: 0,
+    lastLoaded: 0,
+    isLoading: false,
+    error: null,
+    recentUpdated: null,
+    recentUpdatedLastLoaded: 0
+  }
+  
+  // 전역 상태 변경 콜백들
+  private dataStateCallbacks: Set<(state: GlobalDataState) => void> = new Set()
+  
+  // 전역 데이터 상태 구독
+  subscribeToGlobalData(callback: (state: GlobalDataState) => void) {
+    this.dataStateCallbacks.add(callback)
+    
+    // 즉시 현재 상태 전달
+    callback({ ...this.globalDataState })
+    
+    // 구독 해제 함수 반환
+    return () => {
+      this.dataStateCallbacks.delete(callback)
+    }
+  }
+  
+  // 전역 상태 업데이트 및 콜백 호출
+  private updateGlobalState(updates: Partial<GlobalDataState>) {
+    this.globalDataState = { ...this.globalDataState, ...updates }
+    
+    // 모든 구독자에게 상태 변경 알림
+    this.dataStateCallbacks.forEach(callback => {
+      try {
+        callback({ ...this.globalDataState })
+      } catch (error) {
+        console.error('전역 상태 콜백 에러:', error)
+      }
+    })
+  }
+  
+  // 전역 데이터 로드 (한 번만 실행)
+  async loadGlobalData(force = false): Promise<Bill[] | null> {
+    // 이미 로딩 중이면 대기
+    if (this.globalDataState.isLoading && !force) {
+      console.log('⏳ 이미 전역 데이터 로딩 중...')
+      return this.globalDataState.bills
+    }
+    
+    // 이미 로드된 데이터가 있고 강제가 아니면 재사용
+    if (this.globalDataState.bills && this.globalDataState.bills.length > 0 && !force) {
+      const timeSinceLoad = Date.now() - this.globalDataState.lastLoaded
+      const oneHour = 60 * 60 * 1000
+      
+      if (timeSinceLoad < oneHour) {
+        console.log('✨ 전역 캐시 데이터 재사용 (로드 후 ' + Math.round(timeSinceLoad/1000/60) + '분 경과)')
+        return this.globalDataState.bills
+      }
+    }
+    
+    console.log('🚀 전역 데이터 로딩 시작...')
+    this.updateGlobalState({ isLoading: true, error: null })
+    
+    try {
+      // 1. 캐시에서 먼저 시도
+      let bills = await billCache.getCachedBills()
+      
+      if (bills && bills.length > 0) {
+        console.log(`💾 캐시에서 ${bills.length}개 전역 데이터 로드`)
+        this.updateGlobalState({
+          bills,
+          totalCount: bills.length,
+          lastLoaded: Date.now(),
+          isLoading: false
+        })
+        return bills
+      }
+      
+      // 2. 캐시에 없으면 DB에서 로드
+      console.log('🔄 DB에서 전역 데이터 로딩...')
+      
+      // 전체 개수 확인
+      const { count } = await this.supabase
+        .from('bills')
+        .select('*', { count: 'exact', head: true })
+      
+      const totalCount = count || 0
+      console.log(`📊 전체 법안 개수: ${totalCount}개`)
+      
+      // 전체 데이터 로드 (병렬 처리)
+      bills = await this.loadAllBillsParallel(totalCount)
+      
+      if (bills && bills.length > 0) {
+        // 캐시에 저장
+        await billCache.setCachedBills(bills, bills.length)
+        
+        this.updateGlobalState({
+          bills,
+          totalCount: bills.length,
+          lastLoaded: Date.now(),
+          isLoading: false
+        })
+        
+        console.log(`✅ 전역 데이터 로딩 완료: ${bills.length}개`)
+        return bills
+      }
+      
+      throw new Error('데이터 로딩 실패')
+      
+    } catch (error) {
+      console.error('❌ 전역 데이터 로딩 실패:', error)
+      this.updateGlobalState({
+        isLoading: false,
+        error: error instanceof Error ? error.message : '데이터 로딩 실패'
+      })
+      return null
+    }
+  }
+  
+  // 병렬로 모든 법안 데이터 로드
+  private async loadAllBillsParallel(totalCount: number): Promise<Bill[]> {
+    const SUPABASE_LIMIT = 1000
+    const maxConcurrentChunks = 6
+    const allBills: Bill[] = []
+    let offset = 0
+    
+    console.log(`🏭 병렬 로딩 시작 - 총 ${totalCount}개를 ${SUPABASE_LIMIT}개씩 ${maxConcurrentChunks}개 동시처리`)
+    
+    while (offset < totalCount) {
+      const chunkPromises: Promise<Bill[]>[] = []
+      
+      // 6개 청크 동시 처리
+      for (let i = 0; i < maxConcurrentChunks && offset < totalCount; i++) {
+        const currentOffset = offset
+        const currentLimit = Math.min(SUPABASE_LIMIT, totalCount - offset)
+        
+        const chunkPromise = this.supabase
+          .from('bills')
+          .select('*')
+          .order('propose_dt', { ascending: false, nullsFirst: false })
+          .order('bill_no', { ascending: false, nullsFirst: false })
+          .range(currentOffset, currentOffset + currentLimit - 1)
+          .then(({ data, error }) => {
+            if (error) {
+              console.error(`❌ 청크 ${currentOffset}-${currentOffset + currentLimit} 실패:`, error)
+              return []
+            }
+            const bills = data || []
+            console.log(`⚡ 청크 완료: ${bills.length}개 (${currentOffset}-${currentOffset + currentLimit})`)
+            return bills
+          })
+        
+        chunkPromises.push(chunkPromise)
+        offset += currentLimit
+      }
+      
+      // 현재 배치 완료 대기
+      const batchResults = await Promise.allSettled(chunkPromises)
+      
+      batchResults.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          allBills.push(...result.value)
+        }
+      })
+      
+      console.log(`📈 진행률: ${Math.round((allBills.length / totalCount) * 100)}% (${allBills.length}/${totalCount}개)`)
+      
+      // 배치 간 짧은 대기
+      if (offset < totalCount) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+    }
+    
+    // 최종 정렬
+    return allBills.sort((a, b) => {
+      const aDate = new Date(a.propose_dt || '').getTime()
+      const bDate = new Date(b.propose_dt || '').getTime()
+      if (bDate !== aDate) return bDate - aDate
+      
+      const aNum = parseInt(a.bill_no?.replace(/\D/g, '') || '0')
+      const bNum = parseInt(b.bill_no?.replace(/\D/g, '') || '0')
+      return bNum - aNum
+    })
+  }
+  
+  // 전역 데이터 가져오기 (로드되지 않았으면 로드)
+  async getGlobalData(): Promise<Bill[] | null> {
+    if (this.globalDataState.bills && this.globalDataState.bills.length > 0) {
+      return this.globalDataState.bills
+    }
+    
+    return await this.loadGlobalData()
+  }
+  
+  // 전역 데이터 강제 새로고침
+  async refreshGlobalData(): Promise<Bill[] | null> {
+    console.log('🔄 전역 데이터 강제 새로고침...')
+    return await this.loadGlobalData(true)
+  }
+  
+  // 최근 진행 단계 변경 데이터 로드
+  async loadRecentUpdatedData(force = false): Promise<Array<{
+    bill_id: string
+    tracked_at: string
+    old_value: string
+    new_value: string
+    bills: Bill
+  }> | null> {
+    // 이미 로드된 데이터가 있고 강제가 아니면 재사용
+    if (this.globalDataState.recentUpdated && !force) {
+      const timeSinceLoad = Date.now() - this.globalDataState.recentUpdatedLastLoaded
+      const thirtyMinutes = 30 * 60 * 1000 // 30분 캐시 (더 자주 갱신)
+      
+      if (timeSinceLoad < thirtyMinutes) {
+        console.log('✨ 최근 진행 단계 변경 캐시 재사용 (로드 후 ' + Math.round(timeSinceLoad/1000/60) + '분 경과)')
+        return this.globalDataState.recentUpdated
+      }
+    }
+    
+    console.log('🔄 최근 진행 단계 변경 데이터 로딩...')
+    
+    try {
+      const oneWeekAgo = new Date()
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+
+      const { data, error } = await this.supabase
+        .from('bill_history')
+        .select(`
+          bill_id, 
+          bill_no, 
+          bill_name, 
+          tracked_at,
+          old_value,
+          new_value,
+          bills!inner(*)
+        `)
+        .eq('change_type', 'stage_changed')
+        .gte('tracked_at', oneWeekAgo.toISOString())
+        .order('tracked_at', { ascending: false })
+        .order('bill_no', { ascending: false })
+
+      if (error) throw error
+
+      // 타입 안전하게 변환
+      const typedData = (data || []).map(item => ({
+        bill_id: item.bill_id,
+        tracked_at: item.tracked_at,
+        old_value: item.old_value,
+        new_value: item.new_value,
+        bills: Array.isArray(item.bills) ? item.bills[0] : item.bills
+      }))
+
+      // 전역 상태 업데이트
+      this.updateGlobalState({
+        recentUpdated: typedData,
+        recentUpdatedLastLoaded: Date.now()
+      })
+      
+      console.log(`✅ 최근 진행 단계 변경 데이터 로드 완료: ${typedData.length}개`)
+      return typedData
+      
+    } catch (error) {
+      console.error('❌ 최근 진행 단계 변경 데이터 로드 실패:', error)
+      this.updateGlobalState({
+        recentUpdated: [],
+        recentUpdatedLastLoaded: Date.now()
+      })
+      return []
+    }
+  }
+  
+  // 최근 진행 단계 변경 데이터 가져오기
+  async getRecentUpdatedData(): Promise<Array<{
+    bill_id: string
+    tracked_at: string
+    old_value: string
+    new_value: string
+    bills: Bill
+  }> | null> {
+    if (this.globalDataState.recentUpdated) {
+      return this.globalDataState.recentUpdated
+    }
+    
+    return await this.loadRecentUpdatedData()
+  }
 
   // 사용자 액션 기반 동기화 설정
   setupUserActionSync() {
@@ -286,47 +590,59 @@ class CacheSyncManager {
     }
   }
 
-  // 업데이트 체크 (개선된 버전)
+  // 업데이트 체크 (병렬처리 개선 버전)
   private async checkForUpdates() {
     try {
-      // 캐시된 데이터의 최신 업데이트 시간 확인
-      const cachedMeta = await billCache.getCacheMetadata()
-      if (!cachedMeta) {
+      console.log('🔍 캐시 동기화 체크 중...')
+
+      // 병렬로 캐시 메타데이터와 최신 법안 정보 동시 가져오기
+      const [cachedMeta, latestBillResponse] = await Promise.allSettled([
+        billCache.getCacheMetadata(),
+        this.supabase
+          .from('bills')
+          .select('updated_at, propose_dt, bill_no')
+          .order('updated_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .single()
+      ])
+
+      // 캐시 메타데이터 체크
+      if (cachedMeta.status === 'rejected' || !cachedMeta.value) {
         console.log('📭 캐시 메타데이터 없음 - 동기화 불필요')
         return
       }
 
-      console.log('🔍 캐시 동기화 체크 중...')
+      // 최신 법안 정보 체크
+      if (latestBillResponse.status === 'rejected' || !latestBillResponse.value.data) {
+        console.log('⚠️ 최신 법안 정보 가져오기 실패 - 동기화 스킵')
+        return
+      }
 
-      // 실제 DB에서 최신 업데이트 시간 확인
-      const { data: latestBill } = await this.supabase
-        .from('bills')
-        .select('updated_at, propose_dt, bill_no')
-        .order('updated_at', { ascending: false, nullsFirst: false })
-        .limit(1)
-        .single()
+      const latestBill = latestBillResponse.value.data
+      const latestUpdate = new Date(latestBill.updated_at).getTime()
+      const cacheTime = cachedMeta.value.lastUpdated
+      const timeDiff = latestUpdate - cacheTime
 
-      if (latestBill) {
-        const latestUpdate = new Date(latestBill.updated_at).getTime()
-        const cacheTime = cachedMeta.lastUpdated
-        const timeDiff = latestUpdate - cacheTime
+      console.log(`📊 동기화 체크: 최신 업데이트 ${new Date(latestUpdate).toLocaleString()}, 캐시 ${new Date(cacheTime).toLocaleString()}`)
 
-        console.log(`📊 동기화 체크: 최신 업데이트 ${new Date(latestUpdate).toLocaleString()}, 캐시 ${new Date(cacheTime).toLocaleString()}`)
-
-        // 캐시가 1시간 이상 오래되었거나 새로운 업데이트가 있으면 무효화
-        if (timeDiff > 60 * 60 * 1000) { // 1시간
-          console.log(`🔄 캐시가 오래됨 (${Math.round(timeDiff / (60 * 1000))}분) - 캐시 무효화`)
-          await billCache.clearCache()
-          
-          // 캐시 무효화 이벤트 발생 (다른 컴포넌트에서 감지 가능)
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('cache-invalidated', { 
-              detail: { reason: 'outdated', timeDiff } 
-            }))
-          }
-        } else {
-          console.log('✅ 캐시가 최신 상태')
+      // 캐시가 1시간 이상 오래되었거나 새로운 업데이트가 있으면 무효화
+      if (timeDiff > 60 * 60 * 1000) { // 1시간
+        console.log(`🔄 캐시가 오래됨 (${Math.round(timeDiff / (60 * 1000))}분) - 캐시 무효화`)
+        
+        // 캐시 무효화도 병렬로 처리
+        await Promise.allSettled([
+          billCache.clearCache(),
+          favoritesCache.clearAllCache()
+        ])
+        
+        // 캐시 무효화 이벤트 발생 (다른 컴포넌트에서 감지 가능)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('cache-invalidated', { 
+            detail: { reason: 'outdated', timeDiff } 
+          }))
         }
+      } else {
+        console.log('✅ 캐시가 최신 상태')
       }
     } catch (error) {
       console.error('업데이트 체크 실패:', error)

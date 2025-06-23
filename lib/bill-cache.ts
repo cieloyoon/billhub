@@ -13,7 +13,7 @@ interface CachedData {
 
 class BillCacheManager {
   private dbName = 'lawpage-bills'
-  private dbVersion = 1
+  private dbVersion = 2
   private billsStore = 'bills'
   private metadataStore = 'metadata'
   private cacheExpiry = 24 * 60 * 60 * 1000 // 24시간
@@ -25,7 +25,11 @@ class BillCacheManager {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion)
 
-      request.onerror = () => reject(request.error)
+      request.onerror = () => {
+        console.error('IndexedDB 초기화 실패:', request.error)
+        reject(request.error)
+      }
+      
       request.onsuccess = () => {
         this.db = request.result
         resolve(request.result)
@@ -33,19 +37,30 @@ class BillCacheManager {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result
+        const transaction = (event.target as IDBOpenDBRequest).transaction!
 
-        // Bills 스토어
-        if (!db.objectStoreNames.contains(this.billsStore)) {
-          const billsStore = db.createObjectStore(this.billsStore, { keyPath: 'bill_id' })
-          billsStore.createIndex('propose_dt', 'propose_dt', { unique: false })
-          billsStore.createIndex('proc_dt', 'proc_dt', { unique: false })
-          billsStore.createIndex('bill_no', 'bill_no', { unique: false })
+        // 기존 스토어 삭제 (필요시)
+        if (db.objectStoreNames.contains(this.billsStore)) {
+          db.deleteObjectStore(this.billsStore)
+        }
+        if (db.objectStoreNames.contains(this.metadataStore)) {
+          db.deleteObjectStore(this.metadataStore)
         }
 
-        // Metadata 스토어
-        if (!db.objectStoreNames.contains(this.metadataStore)) {
-          db.createObjectStore(this.metadataStore, { keyPath: 'key' })
-        }
+        // Bills 스토어 재생성
+        const billsStore = db.createObjectStore(this.billsStore, { keyPath: 'bill_id' })
+        billsStore.createIndex('propose_dt', 'propose_dt', { unique: false })
+        billsStore.createIndex('proc_dt', 'proc_dt', { unique: false })
+        billsStore.createIndex('bill_no', 'bill_no', { unique: false })
+
+        // Metadata 스토어 재생성
+        db.createObjectStore(this.metadataStore, { keyPath: 'key' })
+
+        console.log('IndexedDB 스키마 업그레이드 완료')
+      }
+
+      request.onblocked = () => {
+        console.warn('IndexedDB 업그레이드가 차단됨. 다른 탭을 닫아주세요.')
       }
     })
   }
@@ -93,28 +108,47 @@ class BillCacheManager {
         clearRequest.onerror = () => reject(clearRequest.error)
       })
 
-      // 새 법안 데이터 저장 (배치로 처리)
-      const batchSize = 100
-      for (let i = 0; i < bills.length; i += batchSize) {
-        const batch = bills.slice(i, i + batchSize)
-        await Promise.all(
-          batch.map(bill => new Promise<void>((resolve, reject) => {
-            const request = billsStore.add(bill)
-            request.onsuccess = () => resolve()
-            request.onerror = () => reject(request.error)
-          }))
-        )
+      // 병렬 배치 저장으로 더 빠르게 처리
+      const batchSize = 1000 // 배치 크기 대폭 증가 (200 → 1000)
+      const maxConcurrentBatches = 3 // 동시 처리할 배치 수
+      
+      console.log(`🚀 ${bills.length}개 법안을 ${batchSize}개씩 ${maxConcurrentBatches}개 배치로 병렬 저장 시작`)
+
+      for (let i = 0; i < bills.length; i += batchSize * maxConcurrentBatches) {
+        // 여러 배치를 동시에 처리
+        const concurrentBatches = []
+        
+        for (let j = 0; j < maxConcurrentBatches && (i + j * batchSize) < bills.length; j++) {
+          const startIdx = i + j * batchSize
+          const endIdx = Math.min(startIdx + batchSize, bills.length)
+          const batch = bills.slice(startIdx, endIdx)
+          
+          // 각 배치를 병렬로 저장
+          const batchPromise = Promise.all(
+            batch.map(bill => new Promise<void>((resolve, reject) => {
+              const request = billsStore.add(bill)
+              request.onsuccess = () => resolve()
+              request.onerror = () => reject(request.error)
+            }))
+          )
+          
+          concurrentBatches.push(batchPromise)
+        }
+        
+        // 모든 병렬 배치 완료 대기
+        await Promise.all(concurrentBatches)
         
         // 진행률 표시
-        const progress = Math.round(((i + batch.length) / bills.length) * 100)
-        console.log(`캐시 저장 진행률: ${progress}%`)
+        const processedCount = Math.min(i + batchSize * maxConcurrentBatches, bills.length)
+        const progress = Math.round((processedCount / bills.length) * 100)
+        console.log(`⚡ 병렬 캐시 저장 진행률: ${progress}% (${processedCount}/${bills.length})`)
       }
 
       // 메타데이터 업데이트
       const metadataStore = transaction.objectStore(this.metadataStore)
       const metadata: CacheMetadata = {
         lastUpdated: Date.now(),
-        version: '1.0',
+        version: '2.0', // 병렬처리 버전
         totalCount
       }
 
@@ -124,7 +158,7 @@ class BillCacheManager {
         request.onerror = () => reject(request.error)
       })
 
-      console.log(`✅ ${bills.length}개 법안 데이터를 캐시에 저장완료`)
+      console.log(`✅ ${bills.length}개 법안 데이터를 병렬 캐시에 저장완료`)
     } catch (error) {
       console.error('캐시 저장 실패:', error)
       throw error
