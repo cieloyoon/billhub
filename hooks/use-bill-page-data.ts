@@ -493,13 +493,13 @@ export function useBillPageData() {
             .then(({ data, error }) => {
               if (error) {
                 console.error(`❌ 청크 ${currentOffset}-${currentOffset + currentLimit} 실패:`, error)
-                return []
+                return [] as Bill[]
               }
-              const bills = data || []
+              const bills = (data || []) as Bill[]
               const chunkNum = Math.floor(currentOffset/SUPABASE_LIMIT) + 1
               console.log(`⚡ 청크 ${chunkNum} 완료: ${bills.length}개 로드 (${currentOffset}-${currentOffset + currentLimit})`)
               return bills
-            })
+            }) as Promise<Bill[]>
           
           chunkPromises.push(chunkPromise)
           offset += currentLimit
