@@ -272,7 +272,7 @@ class CacheSyncManager {
       if (error) throw error
 
       // 타입 안전하게 변환
-      const typedData = (data || []).map(item => ({
+      const typedData = (data || []).map((item: any) => ({
         bill_id: item.bill_id,
         tracked_at: item.tracked_at,
         old_value: item.old_value,
