@@ -58,9 +58,9 @@ export const RecentBillsTabs = memo(function RecentBillsTabs({
     <div className="bg-white rounded-lg border">
       <Tabs value={recentSubTab} onValueChange={onRecentSubTabChange}>
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="proposed">최근 접수 의안</TabsTrigger>
-          <TabsTrigger value="updated">최근 진행 단계 변경 의안</TabsTrigger>
-          <TabsTrigger value="processed">최근 처리 완료 의안</TabsTrigger>
+          <TabsTrigger value="proposed">최근 접수</TabsTrigger>
+          <TabsTrigger value="updated">최근 진행 단계 변경</TabsTrigger>
+          <TabsTrigger value="processed">최근 처리 완료</TabsTrigger>
         </TabsList>
         
         <div className="p-6">
