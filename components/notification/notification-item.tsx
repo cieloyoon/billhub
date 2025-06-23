@@ -207,7 +207,7 @@ export function NotificationItem({ notification: initialNotification }: Notifica
             {/* 메시지 내용 */}
             <div 
               className={cn(
-                "text-sm mb-3 line-clamp-3 whitespace-pre-line leading-relaxed",
+                "text-sm mb-3 line-clamp-4 whitespace-pre-line leading-relaxed",
                 notification.is_read ? "text-gray-500" : "text-gray-700"
               )}
               dangerouslySetInnerHTML={{ __html: formatMessage(notification.message) }}
