@@ -170,7 +170,7 @@ class CacheSyncManager {
           .order('propose_dt', { ascending: false, nullsFirst: false })
           .order('bill_no', { ascending: false, nullsFirst: false })
           .range(currentOffset, currentOffset + currentLimit - 1)
-          .then(({ data, error }) => {
+          .then(({ data, error }: { data: any[] | null; error: any }) => {
             if (error) {
               console.error(`❌ 청크 ${currentOffset}-${currentOffset + currentLimit} 실패:`, error)
               return [] as Bill[]
