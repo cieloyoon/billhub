@@ -60,7 +60,6 @@ export function useNotifications() {
       const data: NotificationResponse = await response.json()
       setNotifications(data.notifications)
       setUnreadCount(data.unreadCount)
-      setRefreshTrigger(prev => prev + 1) // 강제 리렌더링 트리거
       
       return data
     } catch (err) {
@@ -122,7 +121,7 @@ export function useNotifications() {
         setUnreadCount(prev => Math.max(0, prev - 1))
       }
       
-      setRefreshTrigger(prev => prev + 1) // 강제 리렌더링 트리거
+      // refreshTrigger 제거 - 상태 변경으로 자동 리렌더링됨
 
       console.log('🌐 API 호출 중...')
       const response = await fetch(`/api/notifications/${notificationId}/read`, {
@@ -159,8 +158,6 @@ export function useNotifications() {
           setUnreadCount(prev => prev + 1)
         }
       }
-      
-      setRefreshTrigger(prev => prev + 1) // 강제 리렌더링 트리거
       
       setError(err instanceof Error ? err.message : 'Unknown error')
       throw err
@@ -243,7 +240,7 @@ export function useNotifications() {
         }
       }
       
-      setRefreshTrigger(prev => prev + 1) // 강제 리렌더링 트리거
+      // refreshTrigger 제거 - 상태 변경으로 자동 리렌더링됨
 
       console.log('🌐 API 삭제 호출 중...')
       const response = await fetch(`/api/notifications/${notificationId}`, {
@@ -290,9 +287,10 @@ export function useNotifications() {
   }
 
   const forceRefresh = () => {
-    console.log('상태 강제 새로고침')
+    console.log('🔄 강제 새로고침 - 알림 목록 재로드')
+    // refreshTrigger는 정말 필요한 경우에만 (컴포넌트 키 변경용)
     setRefreshTrigger(prev => prev + 1)
-    debouncedFetchNotifications()
+    fetchNotifications() // debouncedFetchNotifications 대신 즉시 실행
   }
 
   // 실시간 알림 구독

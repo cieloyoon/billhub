@@ -33,22 +33,14 @@ export function NotificationList({ className = "" }: NotificationListProps) {
     fetchNotifications(1, activeTab === 'unread')
   }, [activeTab])
 
-  // 초기 로딩
-  useEffect(() => {
-    console.log('🚀 컴포넌트 마운트, 초기 알림 목록 가져오기')
-    fetchNotifications(1, false)
-  }, [])
-
-  // 알림 목록 변화 감지 (디버깅 목적)
+  // 알림 목록 변화 감지 (디버깅 목적 - 간소화)
   useEffect(() => {
     console.log('📊 알림 목록 업데이트:', {
       총개수: notifications.length,
-      읽지않음: notifications.filter(n => !n.is_read).length,
-      읽지않음카운트: unreadCount,
-      현재탭: activeTab,
-      refreshTrigger
+      읽지않음: unreadCount,
+      현재탭: activeTab
     })
-  }, [notifications, unreadCount, activeTab, refreshTrigger])
+  }, [notifications.length, unreadCount, activeTab])
 
   const handleMarkAllAsRead = async () => {
     try {
@@ -144,7 +136,6 @@ export function NotificationList({ className = "" }: NotificationListProps) {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {notifications.map((notification) => {
-                    console.log('🔄 렌더링 중인 알림:', { id: notification.id, title: notification.title })
                     return (
                       <NotificationItem
                         key={`${notification.id}-${refreshTrigger}`}
@@ -180,7 +171,6 @@ export function NotificationList({ className = "" }: NotificationListProps) {
                   {notifications
                     .filter(n => !n.is_read)
                     .map((notification) => {
-                      console.log('🔄 읽지않음 탭 렌더링:', { id: notification.id, title: notification.title })
                       return (
                         <NotificationItem
                           key={`${notification.id}-${refreshTrigger}`}
