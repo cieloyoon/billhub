@@ -37,7 +37,10 @@ export function ChangedBillCard({
   return (
     <BillCard
       key={`${item.bill_id}-${item.tracked_at}`}
-      bill={item.bills}
+      bill={{
+        ...item.bills,
+        proposer: item.bills.proposer || null
+      }}
       searchTerm={searchTerm}
       isFavorited={isFavorited(item.bill_id)}
       onFavoriteToggle={onFavoriteToggle}
