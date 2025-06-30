@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import { BillCard } from '@/components/bill/bill-card'
+import { ChangedBillCard } from '@/components/bill/changed-bill-card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -116,21 +117,16 @@ export const RecentBillsTabs = memo(function RecentBillsTabs({
                     최근 진행 단계가 변경된 의안이 없습니다
                   </div>
                 ) : (
-                  recentBills.recentUpdated.map((history: any) => {
-                    const changeDate = new Date(history.tracked_at).toLocaleDateString('ko-KR')
-                    const statusChangeInfo = `🔄 ${history.old_value} → ${history.new_value} (${changeDate})`
-                    
-                    return (
-                      <BillCard
-                        key={`${history.bill_id}-${history.tracked_at}`}
-                        bill={history.bills}
-                        searchTerm=""
-                        isFavorited={isFavorited(history.bill_id)}
-                        onFavoriteToggle={onFavoriteToggle}
-                        extraDateInfo={statusChangeInfo}
-                      />
-                    )
-                  })
+                  recentBills.recentUpdated.map((history: any) => (
+                    <ChangedBillCard
+                      key={`${history.bill_id}-${history.tracked_at}`}
+                      item={history}
+                      searchTerm=""
+                      isFavorited={isFavorited}
+                      onFavoriteToggle={onFavoriteToggle}
+                      dateFormat="full"
+                    />
+                  ))
                 )}
               </div>
             </div>

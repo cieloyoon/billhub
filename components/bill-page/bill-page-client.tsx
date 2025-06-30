@@ -15,7 +15,7 @@ import { BillSearchBar } from '@/components/bill-page/bill-search-bar'
 import { BillFilterSheet } from '@/components/bill-page/bill-filter-sheet'
 import { BillCategoryTabs } from '@/components/bill-page/bill-category-tabs'
 import { BillGrid } from '@/components/bill-page/bill-grid'
-import { RecentBillsTabs } from '@/components/bill-page/recent-bills-tabs'
+
 
 // 전역 캐시 사용 예시:
 // import { useGlobalBillData } from '@/hooks/use-bill-page-data'
@@ -57,8 +57,6 @@ export default function BillPageClient() {
     searchTerm,
     debouncedSearchTerm,
     activeCategory,
-    recentSubTab,
-    recentBills,
     viewMode,
     filters,
     hasMore,
@@ -78,7 +76,6 @@ export default function BillPageClient() {
     // 액션들
     setSearchTerm,
     setActiveCategory,
-    setRecentSubTab,
     setViewMode,
     handleFilterChange,
     clearFilters,
@@ -131,7 +128,6 @@ export default function BillPageClient() {
               tabCounts={tabCounts}
               currentFilteredCount={currentFilteredCount}
               hasActiveFilters={activeFiltersCount > 0 || debouncedSearchTerm.length > 0}
-              recentSubTab={recentSubTab}
             />
 
             <BillSearchBar 
@@ -164,37 +160,18 @@ export default function BillPageClient() {
 
       {/* 메인 컨텐츠 */}
       <div className="container mx-auto px-4 py-6">
-        {activeCategory === 'recent' ? (
-          <RecentBillsTabs 
-            recentSubTab={recentSubTab}
-            onRecentSubTabChange={setRecentSubTab}
-            recentBills={recentBills}
-            loading={loading && !dataLoaded}
-            viewMode={viewMode}
-            isFavorited={isFavorited}
-            onFavoriteToggle={handleFavoriteToggle}
-            tabCounts={{
-              recentProposed: tabCounts.recentProposed,
-              recentUpdated: tabCounts.recentUpdated,
-              recentProcessed: tabCounts.recentProcessed
-            }}
-          />
-        ) : (
-          <BillGrid 
-            bills={displayedBills}
-            loading={loading}
-            loadingMore={loadingMore}
-            hasMore={hasMore}
-            viewMode={viewMode}
-            searchTerm={debouncedSearchTerm}
-            isFavorited={isFavorited}
-            onFavoriteToggle={handleFavoriteToggle}
-            onClearFilters={clearFilters}
-            loadMoreRef={loadMoreRef as React.RefObject<HTMLDivElement>}
-          />
-        )}
-        
-
+        <BillGrid 
+          bills={displayedBills}
+          loading={loading}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+          viewMode={viewMode}
+          searchTerm={debouncedSearchTerm}
+          isFavorited={isFavorited}
+          onFavoriteToggle={handleFavoriteToggle}
+          onClearFilters={clearFilters}
+          loadMoreRef={loadMoreRef as React.RefObject<HTMLDivElement>}
+        />
       </div>
 
       

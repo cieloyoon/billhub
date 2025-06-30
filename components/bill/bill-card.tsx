@@ -257,7 +257,7 @@ export function BillCard({
                 </div>
               )}
               {extraDateInfo && (
-                <div className="flex items-center justify-end gap-2 text-blue-600 font-medium">
+                <div className="flex items-center justify-end gap-2 text-foreground font-bold">
                   <span>{extraDateInfo}</span>
                 </div>
               )}

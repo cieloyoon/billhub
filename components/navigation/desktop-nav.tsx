@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/bill", label: "의안" },
+  { href: "/bill/today", label: "오늘의 의안" },
   { href: "/bill/mybill", label: "관심 의안" },
   { href: "/notifications", label: "알림" },
 ]
@@ -17,7 +18,7 @@ export function DesktopNav() {
     <nav className="flex items-center space-x-6 text-sm font-medium">
       {navItems.map((item) => {
         const isActive = pathname === item.href || 
-          (item.href === "/bill" && pathname.startsWith("/bill/") && pathname !== "/bill/mybill")
+          (item.href === "/bill" && pathname.startsWith("/bill/") && pathname !== "/bill/mybill" && pathname !== "/bill/today")
         
         return (
           <Link

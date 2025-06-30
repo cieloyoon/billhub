@@ -16,14 +16,10 @@ interface BillPageHeaderProps {
     pending: number
     passed: number
     rejected: number
-    recent: number
-    recentProposed: number
-    recentUpdated: number
-    recentProcessed: number
+    processed: number
   }
   currentFilteredCount: number
   hasActiveFilters: boolean
-  recentSubTab?: string
 }
 
 export function BillPageHeader({ 
@@ -34,8 +30,7 @@ export function BillPageHeader({
   activeCategory,
   tabCounts,
   currentFilteredCount,
-  hasActiveFilters,
-  recentSubTab
+  hasActiveFilters
 }: BillPageHeaderProps) {
   // 카테고리별 이름과 개수 가져오기
   const getCategoryInfo = () => {
@@ -43,20 +38,13 @@ export function BillPageHeader({
       case 'all':
         return { name: '전체', count: hasActiveFilters ? currentFilteredCount : tabCounts.all }
       case 'pending':
-        return { name: '계류중', count: hasActiveFilters ? currentFilteredCount : tabCounts.pending }
+        return { name: '계류의안', count: hasActiveFilters ? currentFilteredCount : tabCounts.pending }
       case 'passed':
         return { name: '통과', count: hasActiveFilters ? currentFilteredCount : tabCounts.passed }
       case 'rejected':
         return { name: '불성립', count: hasActiveFilters ? currentFilteredCount : tabCounts.rejected }
-      case 'recent':
-        if (recentSubTab === 'proposed') {
-          return { name: '최근 접수', count: hasActiveFilters ? currentFilteredCount : tabCounts.recentProposed }
-        } else if (recentSubTab === 'updated') {
-          return { name: '최근 진행 단계 변경', count: hasActiveFilters ? currentFilteredCount : tabCounts.recentUpdated }
-        } else if (recentSubTab === 'processed') {
-          return { name: '최근 처리 완료', count: hasActiveFilters ? currentFilteredCount : tabCounts.recentProcessed }
-        }
-        return { name: '최근', count: hasActiveFilters ? currentFilteredCount : tabCounts.recent }
+      case 'processed':
+        return { name: '처리의안', count: hasActiveFilters ? currentFilteredCount : tabCounts.processed }
       default:
         return { name: '전체', count: hasActiveFilters ? currentFilteredCount : tabCounts.all }
     }

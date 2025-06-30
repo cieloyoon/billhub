@@ -11,7 +11,7 @@ interface BillCategoryTabsProps {
     pending: number
     passed: number
     rejected: number
-    recent: number
+    processed: number
   }
 }
 
@@ -21,7 +21,7 @@ const CATEGORIES = [
   { id: 'pending', name: '계류중', description: '심사중인 의안', icon: '⏳' },
   { id: 'passed', name: '통과', description: '가결된 의안', icon: '✅' },
   { id: 'rejected', name: '불성립', description: '불성립된 의안', icon: '❌' },
-  { id: 'recent', name: '최근', description: '최근 30일 의안', icon: '🆕' },
+  { id: 'processed', name: '처리의안', description: '처리 완료된 의안', icon: '✔️' },
 ]
 
 export function BillCategoryTabs({ 
@@ -36,7 +36,7 @@ export function BillCategoryTabs({
       case 'pending': return tabCounts.pending
       case 'passed': return tabCounts.passed
       case 'rejected': return tabCounts.rejected
-      case 'recent': return tabCounts.recent
+      case 'processed': return tabCounts.processed
       default: return 0
     }
   }

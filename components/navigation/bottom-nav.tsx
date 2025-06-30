@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { FileText, Heart, Bell, Home } from "lucide-react"
+import { FileText, Heart, Bell, Home, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/", label: "홈", icon: Home },
   { href: "/bill", label: "의안", icon: FileText },
+  { href: "/bill/today", label: "오늘의 의안", icon: Calendar },
   { href: "/bill/mybill", label: "관심 의안", icon: Heart },
   { href: "/notifications", label: "알림", icon: Bell },
 ]
@@ -21,7 +22,7 @@ export function BottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href || 
-            (item.href === "/bill" && pathname.startsWith("/bill/") && pathname !== "/bill/mybill")
+            (item.href === "/bill" && pathname.startsWith("/bill/") && pathname !== "/bill/mybill" && pathname !== "/bill/today")
           
           return (
             <Link

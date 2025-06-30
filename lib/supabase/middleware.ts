@@ -43,7 +43,13 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
+    error: userError
   } = await supabase.auth.getUser();
+
+  // refresh token 에러는 무시 (로그아웃 상태로 처리)
+  if (userError && userError.message.includes('refresh_token_not_found')) {
+    console.log('User not authenticated (refresh token not found)')
+  }
 
   // 인증이 필요한 페이지들 체크
   const protectedPaths = ['/bill/mybill', '/notifications'];

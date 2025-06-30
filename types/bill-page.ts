@@ -24,18 +24,6 @@ export interface FilterState {
   date_range: string
 }
 
-export interface RecentBillsData {
-  recentProposed: Bill[]
-  recentProcessed: Bill[]
-  recentUpdated: Array<{
-    bill_id: string
-    tracked_at: string
-    old_value: string
-    new_value: string
-    bills: Bill
-  }>
-}
-
 export interface CacheMetadata {
   lastUpdated: number
   version: string

@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Bill, FilterState, RecentBillsData } from '@/types/bill-page'
+import { Bill, FilterState } from '@/types/bill-page'
 import { billCache } from '@/lib/bill-cache'
 import { cacheSyncManager } from '@/lib/cache-sync'
 import { useFloatingWindow } from '@/hooks/use-floating-window'
@@ -22,8 +22,6 @@ export function useBillPageData() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
-  const [recentSubTab, setRecentSubTab] = useState('proposed')
-  // recentBills 상태 제거 - allBills에서 계산으로 대체
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy] = useState('bill_no')
   const [filters, setFilters] = useState<FilterState>({
@@ -50,10 +48,7 @@ export function useBillPageData() {
     pending: 0,
     passed: 0,
     rejected: 0,
-    recent: 0,
-    recentProposed: 0,
-    recentUpdated: 0,
-    recentProcessed: 0
+    processed: 0
   })
   const [currentFilteredCount, setCurrentFilteredCount] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -65,15 +60,7 @@ export function useBillPageData() {
   
   const itemsPerPage = 12
 
-  // allBills에서 최근 법안 데이터 실시간 계산 + 진행 단계 변경은 별도 API 호출
-  const [recentUpdatedData, setRecentUpdatedData] = useState<Array<{
-    bill_id: string
-    tracked_at: string
-    old_value: string
-    new_value: string
-    bills: Bill
-  }>>([])
-  const [loadingRecentUpdated, setLoadingRecentUpdated] = useState(false)
+
 
   // 컴포넌트 마운트 확인
   useEffect(() => {
@@ -237,7 +224,6 @@ export function useBillPageData() {
       hasMore && 
       !loading && 
       !loadingMore && 
-      activeCategory !== 'recent' &&
       dataLoaded &&
       displayedBills.length > 0
     ) {
@@ -629,68 +615,7 @@ export function useBillPageData() {
     }
   }, [supabase, loadCompleteDataParallel])
 
-  // 최근 진행 단계 변경 데이터 로드
-  const loadRecentUpdated = useCallback(async () => {
-    if (!supabase) return
 
-    setLoadingRecentUpdated(true)
-    try {
-      console.log('🔄 전역 캐시에서 최근 진행 단계 변경 데이터 로드...')
-      
-      // 전역 캐시 시스템 사용
-      const recentUpdatedData = await cacheSyncManager.getRecentUpdatedData()
-      
-      if (recentUpdatedData) {
-        setRecentUpdatedData(recentUpdatedData)
-        console.log(`✅ 전역 캐시에서 최근 진행 단계 변경 데이터 로드 완료: ${recentUpdatedData.length}개`)
-      } else {
-        setRecentUpdatedData([])
-      }
-    } catch (error) {
-      console.error('최근 진행 단계 변경 데이터 로드 실패:', error)
-      setRecentUpdatedData([])
-    } finally {
-      setLoadingRecentUpdated(false)
-    }
-  }, [supabase])
-
-  // 컴포넌트 마운트시 최근 진행 단계 변경 데이터 로드
-  useEffect(() => {
-    if (supabase && mounted) {
-      loadRecentUpdated()
-    }
-  }, [supabase, mounted, loadRecentUpdated])
-
-  const getRecentBills = useCallback((): RecentBillsData => {
-    if (!allBills.length) {
-      return {
-        recentProposed: [],
-        recentProcessed: [],
-        recentUpdated: recentUpdatedData
-      }
-    }
-
-    const oneWeekAgo = new Date()
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-    
-    const recentProposed = allBills.filter(bill => 
-      bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
-    ).sort((a, b) => parseInt(b.bill_no?.replace(/\D/g, '') || '0') - parseInt(a.bill_no?.replace(/\D/g, '') || '0'))
-    
-    const recentProcessed = allBills.filter(bill => 
-      bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
-    ).sort((a, b) => new Date(b.proc_dt || '').getTime() - new Date(a.proc_dt || '').getTime())
-    
-    // recentUpdated는 별도 API에서 가져온 데이터 사용
-    return {
-      recentProposed,
-      recentProcessed,
-      recentUpdated: recentUpdatedData
-    }
-  }, [allBills, recentUpdatedData])
-
-  // 실시간으로 계산된 최근 법안 데이터
-  const recentBills = getRecentBills()
 
   // 실시간으로 계산된 탭 카운트 (allBills 기준)
   const calculateRealtimeTabCounts = useCallback(() => {
@@ -706,24 +631,16 @@ export function useBillPageData() {
       ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
       ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
     ).length
-    
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const recent = allBills.filter(bill => 
-      bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
-    ).length
+    const processed = allBills.filter(bill => bill.pass_gubn === '처리의안').length
 
     return {
       all,
       pending,
       passed,
       rejected,
-      recent,
-      recentProposed: recentBills.recentProposed.length,
-      recentProcessed: recentBills.recentProcessed.length,
-      recentUpdated: recentBills.recentUpdated.length
+      processed
     }
-  }, [allBills, recentBills])
+  }, [allBills, tabCounts])
 
   // 실시간 탭 카운트
   const realtimeTabCounts = calculateRealtimeTabCounts()
@@ -743,22 +660,7 @@ export function useBillPageData() {
       ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
       ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
     ).length / sampleSize
-    
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const recentRatio = sampleBills.filter(bill => 
-      bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
-    ).length / sampleSize
-    
-    const oneWeekAgo = new Date()
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-    const recentProposedRatio = sampleBills.filter(bill => 
-      bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
-    ).length / sampleSize
-    
-    const recentProcessedRatio = sampleBills.filter(bill => 
-      bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
-    ).length / sampleSize
+    const processedRatio = sampleBills.filter(bill => bill.pass_gubn === '처리의안').length / sampleSize
     
     // 전체 개수 기준으로 추정
     setTabCounts({
@@ -766,10 +668,7 @@ export function useBillPageData() {
       pending: Math.round(totalCount * pendingRatio),
       passed: Math.round(totalCount * passedRatio),
       rejected: Math.round(totalCount * rejectedRatio),
-      recent: Math.round(totalCount * recentRatio),
-      recentProposed: Math.round(totalCount * recentProposedRatio),
-      recentUpdated: 0, // API에서 가져올 예정
-      recentProcessed: Math.round(totalCount * recentProcessedRatio)
+      processed: Math.round(totalCount * processedRatio)
     })
     
     console.log(`📊 탭별 개수 추정 완료 (샘플: ${sampleSize}, 전체: ${totalCount})`)
@@ -787,32 +686,14 @@ export function useBillPageData() {
       ['부결', '폐기', '철회'].includes(bill.general_result || '') ||
       ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
     ).length
-    
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const recent = bills.filter(bill => 
-      bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
-    ).length
-    
-    const oneWeekAgo = new Date()
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-    const recentProposed = bills.filter(bill => 
-      bill.propose_dt && new Date(bill.propose_dt) >= oneWeekAgo
-    ).length
-    
-    const recentProcessed = bills.filter(bill => 
-      bill.proc_dt && new Date(bill.proc_dt) >= oneWeekAgo
-    ).length
+    const processed = bills.filter(bill => bill.pass_gubn === '처리의안').length
     
     setTabCounts({
       all,
       pending,
       passed,
       rejected,
-      recent,
-      recentProposed,
-      recentUpdated: 0, // API에서 가져올 예정
-      recentProcessed
+      processed
     })
     
     console.log(`📊 탭별 개수 정확히 계산 완료: 전체 ${all}개`)
@@ -842,12 +723,8 @@ export function useBillPageData() {
             ['재의(부결)', '재의요구'].includes(bill.proc_stage_cd || '')
           )
           break
-        case 'recent':
-          const thirtyDaysAgo = new Date()
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-          filtered = filtered.filter(bill => 
-            bill.propose_dt && new Date(bill.propose_dt) >= thirtyDaysAgo
-          )
+        case 'processed':
+          filtered = filtered.filter(bill => bill.pass_gubn === '처리의안')
           break
       }
     }
@@ -978,16 +855,13 @@ export function useBillPageData() {
       setCacheHit(false)
       setError(null)
       
-      // 최근 진행 단계 변경 데이터도 새로고침
-      await loadRecentUpdated()
-      
       setIsRefreshing(false)
       
     } catch (error) {
       console.error('수동 새로고침 실패:', error)
       setIsRefreshing(false)
     }
-  }, [isRefreshing, loadRecentUpdated])
+  }, [isRefreshing])
 
   return {
     // 상태들
@@ -1001,8 +875,6 @@ export function useBillPageData() {
     searchTerm,
     debouncedSearchTerm,
     activeCategory,
-    recentSubTab,
-    recentBills,
     viewMode,
     filters,
     currentPage,
@@ -1023,7 +895,6 @@ export function useBillPageData() {
     // 액션들
     setSearchTerm,
     setActiveCategory,
-    setRecentSubTab,
     setViewMode,
     handleFilterChange,
     clearFilters,
@@ -1040,13 +911,6 @@ export function useGlobalBillData() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
-  const [recentUpdated, setRecentUpdated] = useState<Array<{
-    bill_id: string
-    tracked_at: string
-    old_value: string
-    new_value: string
-    bills: Bill
-  }> | null>(null)
   
   useEffect(() => {
     // 전역 캐시 상태 구독
@@ -1055,17 +919,11 @@ export function useGlobalBillData() {
       setLoading(state.isLoading)
       setError(state.error)
       setTotalCount(state.totalCount)
-      setRecentUpdated(state.recentUpdated)
     })
     
     // 데이터가 없으면 로드 시작
     if (!bills) {
       cacheSyncManager.getGlobalData()
-    }
-    
-    // 최근 진행 단계 변경 데이터도 로드
-    if (!recentUpdated) {
-      cacheSyncManager.getRecentUpdatedData()
     }
     
     return unsubscribe
@@ -1074,8 +932,7 @@ export function useGlobalBillData() {
   // 강제 새로고침 함수
   const refresh = useCallback(async () => {
     const billsResult = await cacheSyncManager.refreshGlobalData()
-    const recentUpdatedResult = await cacheSyncManager.loadRecentUpdatedData(true)
-    return { bills: billsResult, recentUpdated: recentUpdatedResult }
+    return { bills: billsResult }
   }, [])
   
   return {
@@ -1083,7 +940,6 @@ export function useGlobalBillData() {
     loading,
     error,
     totalCount,
-    recentUpdated,
     refresh
   }
 }
